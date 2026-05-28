@@ -2,210 +2,564 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kurve BR</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kurve BR — £5 Challenge</title>
 <style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d0d1a; color: #f0f0f0; font-family: 'Courier New', monospace; }
-
-  #screens > div { display: none; }
-  #screens > div.active { display: flex; }
-
-  /* Home */
-  #home { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
-  #home h1 { font-size: 3rem; letter-spacing: 6px; color: #e74c3c; text-shadow: 0 0 20px #e74c3c88; }
-  #home p { color: #888; font-size: 0.9rem; }
-
-  .btn {
-    padding: 12px 32px; border: 2px solid currentColor; background: transparent;
-    color: #f0f0f0; font-family: inherit; font-size: 1rem; cursor: pointer;
-    letter-spacing: 2px; transition: background 0.15s, color 0.15s;
-  }
-  .btn:hover { background: #f0f0f0; color: #0d0d1a; }
-  .btn:disabled { opacity: 0.35; cursor: default; }
-  .btn:disabled:hover { background: transparent; color: #f0f0f0; }
-  .btn.primary { color: #e74c3c; border-color: #e74c3c; }
-  .btn.primary:hover { background: #e74c3c; color: #0d0d1a; }
-  .btn.sm { padding: 6px 14px; font-size: 0.75rem; letter-spacing: 1px; }
-
-  input[type=text] {
-    background: #1a1a2e; border: 1px solid #333; color: #f0f0f0;
-    padding: 10px 16px; font-family: inherit; font-size: 1rem; width: 260px; text-align: center;
-  }
-  input[type=text]:focus { outline: none; border-color: #e74c3c; }
-  .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
-  .row label { color: #888; font-size: 0.8rem; letter-spacing: 1px; }
-  .divider { width: 360px; border: none; border-top: 1px solid #222; margin: 4px 0; }
-
-  /* Room browser */
-  #rooms-section { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 360px; }
-  #rooms-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
-  #rooms-header span { font-size: 0.7rem; letter-spacing: 3px; color: #555; }
-  #rooms-refresh { background: none; border: none; color: #555; font-family: inherit; font-size: 0.7rem; cursor: pointer; letter-spacing: 1px; padding: 0; }
-  #rooms-refresh:hover { color: #f0f0f0; }
-  #rooms-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-  .room-card { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: #1a1a2e; border-left: 3px solid #333; }
-  .room-card.full { opacity: 0.4; }
-  .room-card .rc-host { flex: 1; font-size: 0.9rem; }
-  .room-card .rc-count { font-size: 0.8rem; color: #888; min-width: 32px; text-align: right; }
-  .room-card .rc-count.full { color: #e74c3c; }
-  #rooms-empty { font-size: 0.8rem; color: #444; text-align: center; padding: 12px 0; }
-
-  /* Lobby */
-  #lobby { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-  #lobby h2 { font-size: 1.4rem; letter-spacing: 3px; color: #e74c3c; }
-  #room-code-display { font-size: 2rem; letter-spacing: 6px; color: #f0f0f0; cursor: pointer; border-bottom: 1px dashed #555; padding-bottom: 4px; }
-  #room-code-display:hover::after { content: ' \1F4CB'; font-size: 1rem; }
-  .player-list { display: flex; flex-direction: column; gap: 8px; width: 300px; }
-  .player-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a2e; border-left: 3px solid transparent; }
-  .player-row .dot { width: 14px; height: 14px; border-radius: 50%; }
-  .player-row .pname { flex: 1; font-size: 0.9rem; }
-  .player-row .tag { font-size: 0.7rem; color: #888; margin-left: 4px; }
-  #lobby-status { font-size: 0.8rem; color: #888; }
-  #lobby-error { color: #e74c3c; font-size: 0.85rem; min-height: 20px; }
-
-  /* Game */
-  #game { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; background: #000; gap: 0; position: relative; }
-  #hud { width: 680px; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.75rem; color: #888; }
-  #hud-players { display: flex; gap: 12px; flex-wrap: wrap; }
-  .hud-p { display: flex; align-items: center; gap: 4px; }
-  .hud-p .dot { width: 8px; height: 8px; border-radius: 50%; }
-  .hud-p.dead { opacity: 0.3; text-decoration: line-through; }
-  #zone-timer { font-size: 0.75rem; color: #e74c3c; }
-
-  /* Phase bar */
-  #phase-bar { width: 680px; height: 5px; display: flex; gap: 1px; margin-bottom: 2px; }
-  .phase-seg { flex: 1; border-radius: 1px; }
-  .phase-seg.current { animation: segPulse 0.7s ease-in-out infinite alternate; }
-  @keyframes segPulse { from { opacity: 1; } to { opacity: 0.25; } }
-
-  #canvas { display: block; border: 1px solid #222; }
-
-  /* Match overlay */
-  #match-overlay { display: none; position: fixed; inset: 0; background: rgba(13,13,26,0.92); align-items: center; justify-content: center; z-index: 50; }
-  #match-overlay.active { display: flex; }
-  #mo-content { width: 520px; display: flex; flex-direction: column; gap: 16px; }
-  #mo-title { font-size: 1.3rem; letter-spacing: 4px; color: #e74c3c; text-align: center; }
-  .mo-section-label { font-size: 0.7rem; letter-spacing: 2px; color: #555; text-transform: uppercase; margin-bottom: 4px; }
-  .mo-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #1a1a2e; }
-  .mo-place { width: 32px; font-size: 0.85rem; color: #888; }
-  .mo-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
-  .mo-name { flex: 1; font-size: 0.9rem; }
-  .mo-pts { font-size: 0.85rem; color: #f39c12; min-width: 48px; text-align: right; }
-  #mo-next { text-align: center; font-size: 0.8rem; color: #555; letter-spacing: 2px; margin-top: 4px; }
-  .mo-cols { display: flex; gap: 24px; }
-  .mo-cols > div { flex: 1; }
-
-  /* Results */
-  #results { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
-  #results-title { font-size: 1.8rem; letter-spacing: 4px; color: #f0f0f0; }
-  .result-list { display: flex; flex-direction: column; gap: 8px; width: 360px; }
-  .result-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #1a1a2e; border-left: 3px solid transparent; }
-  .result-row .place { font-size: 1.1rem; width: 28px; text-align: center; }
-  .result-row .rname { flex: 1; }
-  .result-row .r-pts { font-size: 0.9rem; color: #f39c12; }
-  .result-row.winner { border-color: #f39c12; }
-  #winner-banner { text-align: center; }
-  #winner-banner .big { font-size: 1.4rem; color: #f39c12; }
-
-  /* Spectator */
-  #spectator-banner { position: fixed; top: 0; left: 0; right: 0; background: #e74c3c; color: #fff; text-align: center; padding: 6px; font-size: 0.8rem; letter-spacing: 2px; z-index: 100; display: none; }
-  #spectator-banner.active { display: block; }
-
-  @media (max-width: 720px) {
-    #hud, #phase-bar, #canvas { width: 100vw !important; }
-    #canvas { height: auto !important; }
-    #mo-content { width: 95vw; }
-  }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+#gw { width: 680px; position: relative; }
+#hud { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: rgba(0,0,0,0.95); border-radius: 6px 6px 0 0; }
+#hud-left { display: flex; align-items: center; gap: 14px; }
+#hud-dots { display: flex; gap: 6px; }
+.hdot { width: 8px; height: 8px; border-radius: 50%; }
+#hud-alive { color: rgba(255,255,255,0.6); font-size: 11px; }
+#balance-display { font-size: 18px; font-weight: 600; font-family: monospace; }
+#match-display { color: rgba(255,255,255,0.6); font-size: 11px; text-align: right; }
+#phase-display { font-size: 10px; font-weight: 600; letter-spacing: 1px; text-align: right; }
+canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px; background: #0d0d1a; }
+#phase-bar { display: flex; gap: 3px; padding: 5px 14px; background: rgba(0,0,0,0.8); }
+.phase-seg { height: 4px; border-radius: 2px; flex: 1; opacity: 0.3; transition: opacity 0.3s; }
+.phase-seg.done { opacity: 1; }
+.phase-seg.current { opacity: 1; animation: pulse 1s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+#overlay, #result-screen, #match-result, #mode-screen, #mp-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.92); z-index: 10; border-radius: 8px; }
+#overlay h2, #mode-screen h2, #mp-placeholder h2 { color: #fff; font-size: 22px; font-weight: 500; margin-bottom: 6px; }
+#overlay p, #mode-screen p, #mp-placeholder p { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 16px; text-align:center; line-height:1.8; }
+.kh { color: rgba(255,255,255,0.75); font-size: 13px; margin-bottom: 18px; text-align: center; line-height: 2; }
+.kh b { color: #FF4444; }
+#play-btn, #next-btn, #cashout-btn, #again-btn, #solo-btn, #mp-btn, #mp-back-btn { border: none; padding: 11px 32px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+#play-btn { background: #4CFF6C; color: #111; }
+#next-btn { background: #4CFF6C; color: #111; }
+#cashout-btn { background: #FFD700; color: #111; }
+#again-btn { background: #FF4444; color: #fff; }
+#solo-btn { background: #4CFF6C; color: #111; }
+#mp-btn { background: #4BA8FF; color: #111; }
+#mp-back-btn { background: transparent; color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.2); }
+#play-btn:hover { background: #2ecc71; }
+#next-btn:hover { background: #2ecc71; }
+#solo-btn:hover { background: #2ecc71; }
+#mp-btn:hover { background: #3a8fd4; }
+#mp-back-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+#result-screen, #match-result, #overlay, #mp-placeholder { display: none; }
+.mode-btns { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+#mr-result { font-size: 48px; font-weight: 700; margin-bottom: 4px; }
+#mr-balance { font-size: 16px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
+#mr-match { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 20px; }
+#final-title { font-size: 26px; font-weight: 500; margin-bottom: 6px; }
+#final-balance { font-size: 52px; font-weight: 700; margin-bottom: 4px; }
+#final-sub { color: rgba(255,255,255,0.45); font-size: 13px; margin-bottom: 6px; }
+#final-summary { color: rgba(255,255,255,0.35); font-size: 11px; margin-bottom: 24px; }
+#elim-msg { position: absolute; top: 55px; left: 50%; transform: translateX(-50%); color: #fff; font-size: 12px; background: rgba(0,0,0,0.7); padding: 3px 12px; border-radius: 20px; pointer-events: none; opacity: 0; transition: opacity 0.25s; z-index: 9; white-space: nowrap; }
+#cd-msg { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); color: #fff; font-size: 60px; font-weight: 500; pointer-events: none; opacity: 0; z-index: 9; }
+.legend { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+.leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: rgba(255,255,255,0.6); }
+.leg-dot { width: 8px; height: 8px; border-radius: 50%; }
 </style>
 </head>
 <body>
-
-<div id="spectator-banner">SPECTATOR MODE</div>
-
-<div id="screens">
-
-  <!-- Home -->
-  <div id="home" class="active">
-    <h1>KURVE BR</h1>
-    <p>Multiplayer curve fever — last one alive wins</p>
-    <div class="row">
-      <label>YOUR NAME</label>
-      <input id="home-name" type="text" placeholder="enter name" maxlength="16" autocomplete="off">
+<div id="gw">
+  <div id="hud">
+    <div id="hud-left">
+      <div id="hud-dots"></div>
+      <div id="hud-alive">6 alive</div>
     </div>
-    <div class="row">
-      <button class="btn primary" id="btn-create-public">CREATE PUBLIC</button>
-      <button class="btn" id="btn-create-private">CREATE PRIVATE</button>
+    <div id="balance-display" style="color:rgba(255,255,255,0.6)">£0.00</div>
+    <div style="text-align:right">
+      <div id="match-display">Match 1 / 20</div>
+      <div id="phase-display" style="color:#4CFF6C">EASY</div>
     </div>
-    <div class="row">
-      <input id="join-code" type="text" placeholder="room code" maxlength="10" style="width:180px" autocomplete="off">
-      <button class="btn" id="btn-join">JOIN</button>
-      <button class="btn" id="btn-spectate">WATCH</button>
-    </div>
-    <div id="home-error" style="color:#e74c3c;font-size:0.85rem;min-height:20px;"></div>
-    <hr class="divider">
-    <div id="rooms-section">
-      <div id="rooms-header">
-        <span>OPEN ROOMS</span>
-        <button id="rooms-refresh">&#8635; refresh</button>
-      </div>
-      <div id="rooms-list">
-        <div id="rooms-empty">No open rooms right now</div>
-      </div>
+  </div>
+  <div id="phase-bar"></div>
+  <div id="elim-msg"></div>
+  <div id="cd-msg"></div>
+  <canvas id="c" width="680" height="420"></canvas>
+
+  <div id="mode-screen">
+    <h2>Kurve BR — £5 Challenge</h2>
+    <p>Choose your mode</p>
+    <div class="mode-btns">
+      <button id="solo-btn">Solo Challenge</button>
+      <button id="mp-btn">Multiplayer Room</button>
     </div>
   </div>
 
-  <!-- Lobby -->
-  <div id="lobby">
-    <h2>LOBBY</h2>
-    <div id="room-code-display" title="Click to copy"></div>
-    <div class="player-list" id="lobby-player-list"></div>
-    <div id="lobby-status"></div>
-    <div id="lobby-error"></div>
-    <button class="btn primary" id="btn-start" style="display:none">START GAME</button>
-    <button class="btn" id="btn-leave-lobby">LEAVE</button>
+  <div id="mp-placeholder">
+    <h2>Multiplayer Room</h2>
+    <p>Coming soon</p>
+    <button id="mp-back-btn">← Back</button>
   </div>
 
-  <!-- Game -->
-  <div id="game">
-    <div id="hud">
-      <div id="hud-players"></div>
-      <div id="zone-timer"></div>
+  <div id="overlay">
+    <h2>Kurve BR — £5 Challenge</h2>
+    <p>20 matches. Win £5 per match. Lose £5 per match.<br>Cash out your balance at the end. Max £100.</p>
+    <div class="kh">
+      <b>← →</b> arrow keys to steer<br>
+      Survive longest to win the match<br>
+      <span style="color:rgba(255,255,255,0.35);font-size:11px;">Easy → Moderate → Difficult → Impossible</span>
     </div>
-    <div id="phase-bar"></div>
-    <canvas id="canvas" width="680" height="420"></canvas>
-    <div id="match-overlay">
-      <div id="mo-content">
-        <div id="mo-title"></div>
-        <div class="mo-cols">
-          <div>
-            <div class="mo-section-label">Match result</div>
-            <div id="mo-placements"></div>
-          </div>
-          <div>
-            <div class="mo-section-label">Standings</div>
-            <div id="mo-standings"></div>
-          </div>
-        </div>
-        <div id="mo-next"></div>
-      </div>
+    <div class="legend">
+      <div class="leg-item"><div class="leg-dot" style="background:#FF4444"></div>You</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#FFD700"></div>Survivor</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#4CFF6C"></div>Survivor</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#4BA8FF;outline:1.5px solid rgba(255,255,255,0.5);outline-offset:1px"></div>Hunter</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#FF8C00;outline:1.5px solid rgba(255,255,255,0.5);outline-offset:1px"></div>Hunter</div>
+      <div class="leg-item"><div class="leg-dot" style="background:#DA70D6;outline:1.5px solid rgba(255,255,255,0.5);outline-offset:1px"></div>Hunter</div>
     </div>
+    <button id="play-btn">Start Session</button>
   </div>
 
-  <!-- Session results -->
-  <div id="results">
-    <div id="results-title">SESSION COMPLETE</div>
-    <div id="winner-banner"></div>
-    <div class="result-list" id="result-list"></div>
-    <div class="row">
-      <button class="btn primary" id="btn-rematch">NEW SESSION</button>
-      <button class="btn" id="btn-home">MAIN MENU</button>
-    </div>
+  <div id="match-result">
+    <div id="mr-result"></div>
+    <div id="mr-balance"></div>
+    <div id="mr-match"></div>
+    <button id="next-btn">Next Match</button>
   </div>
 
+  <div id="result-screen">
+    <div id="final-title"></div>
+    <div id="final-balance"></div>
+    <div id="final-sub"></div>
+    <div id="final-summary"></div>
+    <button id="cashout-btn" style="display:none">Cash Out</button>
+    <button id="again-btn">Play Again</button>
+  </div>
 </div>
 
-<script src="/socket.io/socket.io.js"></script>
-<script src="/game.js"></script>
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = 680, H = 420;
+
+  const STEP = 1.9;
+  const LINE_W = 3;
+  const TOTAL_MATCHES = 20;
+  const MATCH_STAKE = 5;
+  const MAX_BALANCE = 100;
+
+  const PHASES = [
+    { name:'EASY',       color:'#4CFF6C', matches:[1,3],   D:0.032, floodCap:320,  hunterWeight:0.2, truce:600, minSurvive:8,  minOpen:8, reactionDelay:8  },
+    { name:'MODERATE',   color:'#FFD700', matches:[4,6],   D:0.035, floodCap:300,  hunterWeight:1.8, truce:350, minSurvive:14, minOpen:15, reactionDelay:0  },
+    { name:'DIFFICULT',  color:'#FF8C00', matches:[7,12],  D:0.042, floodCap:700,  hunterWeight:4.0, truce:200, minSurvive:10, minOpen:22, reactionDelay:0  },
+    { name:'IMPOSSIBLE', color:'#FF4444', matches:[13,20], D:0.050, floodCap:1200, hunterWeight:8.0, truce:80,  minSurvive:6,  minOpen:30, reactionDelay:0  },
+  ];
+
+  function getPhase(matchNum){
+    return PHASES.find(p => matchNum >= p.matches[0] && matchNum <= p.matches[1]);
+  }
+
+  const PLAYERS = [
+    { id:'red',    color:'#FF4444', isBot:false, type:'player'   },
+    { id:'yellow', color:'#FFD700', isBot:true,  type:'survivor' },
+    { id:'green',  color:'#4CFF6C', isBot:true,  type:'survivor' },
+    { id:'blue',   color:'#4BA8FF', isBot:true,  type:'hunter'   },
+    { id:'orange', color:'#FF8C00', isBot:true,  type:'hunter'   },
+    { id:'purple', color:'#DA70D6', isBot:true,  type:'hunter'   },
+  ];
+
+  const HOLE_INT = 90, HOLE_RND = 90, HOLE_LEN = 12, SELF_IMM = 18;
+
+  let keys={}, curves=[], pixelMap={};
+  let animId=null, active=false, globalFrame=0;
+  let deadCount=0, zoneSize=0, zoneTimer=30, zoneIv=null, elimTO=null;
+  let currentMatch=1, balance=0, wins=0, losses=0;
+  let currentPhase=PHASES[0];
+
+  document.addEventListener('keydown',e=>{
+    keys[e.code]=true;
+    if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
+  });
+  document.addEventListener('keyup',e=>keys[e.code]=false);
+
+  function pk(x,y){ return ((Math.round(x)&0x7FFF)<<15)|(Math.round(y)&0x7FFF); }
+  function setPixel(x,y,cid,f){ pixelMap[pk(x,y)]={cid,f}; }
+  function getPixel(x,y){ return pixelMap[pk(x,y)]; }
+  function oob(x,y){ return x<=zoneSize+2||y<=zoneSize+2||x>=W-zoneSize-2||y>=H-zoneSize-2; }
+
+  function solid(x,y,cid,cFrame){
+    if(oob(x,y)) return true;
+    const p=getPixel(x,y);
+    if(!p) return false;
+    if(p.cid===cid&&(cFrame-p.f)<SELF_IMM) return false;
+    return true;
+  }
+
+  function collidesAt(x,y,c){
+    for(let dx=-2;dx<=2;dx++)
+      for(let dy=-2;dy<=2;dy++)
+        if(solid(x+dx,y+dy,c.id,c.ownFrame)) return true;
+    return false;
+  }
+
+  function walkForward(sx,sy,sa,c,steps){
+    let x=sx,y=sy,a=sa;
+    const f0=c.ownFrame;
+    for(let i=0;i<steps;i++){
+      x+=Math.cos(a)*STEP; y+=Math.sin(a)*STEP;
+      let hit=false;
+      for(let dx=-2;dx<=2&&!hit;dx++)
+        for(let dy=-2;dy<=2&&!hit;dy++){
+          if(oob(x+dx,y+dy)){hit=true;break;}
+          const p=getPixel(x+dx,y+dy);
+          if(p&&!(p.cid===c.id&&(f0-p.f)<SELF_IMM)) hit=true;
+        }
+      if(hit) return {survived:i,landX:x,landY:y};
+    }
+    return {survived:steps,landX:x,landY:y};
+  }
+
+  function floodFill(sx,sy,c,limit){
+    const visited=new Set();
+    const q=[[Math.round(sx),Math.round(sy)]];
+    let count=0;
+    const dirs=[[4,0],[-4,0],[0,4],[0,-4],[3,3],[-3,3],[3,-3],[-3,-3]];
+    while(q.length&&count<limit){
+      const item=q.shift();
+      const key=(item[0]<<16)|item[1];
+      if(visited.has(key)) continue;
+      visited.add(key);
+      if(solid(item[0],item[1],c.id,c.ownFrame)) continue;
+      count++;
+      for(const d of dirs) q.push([item[0]+d[0],item[1]+d[1]]);
+    }
+    return count;
+  }
+
+  function getPlayer(){ return curves.find(x=>!x.player.isBot&&x.alive); }
+
+  function trucePenalty(nx,ny){
+    if(globalFrame>currentPhase.truce) return 0;
+    const w=1-(globalFrame/currentPhase.truce);
+    let pen=0;
+    curves.forEach(o=>{
+      if(!o.alive) return;
+      const d=Math.hypot(nx-o.x,ny-o.y);
+      if(d<110) pen+=((110-d)/110)*360*w;
+    });
+    return pen;
+  }
+
+  function survivorThink(c){
+    const a=c.angle;
+    const step=currentPhase.D;
+    const cands=[a-step*5,a-step*2.5,a,a+step*2.5,a+step*5];
+    let best=-Infinity,bestAngle=a,anyValid=false;
+    for(const ca of cands){
+      const {survived,landX,landY}=walkForward(c.x,c.y,ca,c,22);
+      if(survived<currentPhase.minSurvive) continue;
+      anyValid=true;
+      const openCells=floodFill(landX,landY,c,currentPhase.floodCap);
+      let score=openCells*4;
+      const m=50;
+      if(landX<zoneSize+m||landX>W-zoneSize-m||landY<zoneSize+m||landY>H-zoneSize-m) score-=900;
+      score-=Math.hypot(landX-W/2,landY-H/2)*0.2;
+      score-=trucePenalty(landX,landY);
+      if(score>best){best=score;bestAngle=ca;}
+    }
+    if(!anyValid){
+      let fb=-1;
+      for(const ca of cands){const {survived}=walkForward(c.x,c.y,ca,c,30);if(survived>fb){fb=survived;bestAngle=ca;}}
+    }
+    return Math.max(-step*5,Math.min(step*5,bestAngle-a));
+  }
+
+  function hunterThink(c){
+    const a=c.angle;
+    const step=currentPhase.D;
+    const hw=currentPhase.hunterWeight;
+    const player=getPlayer();
+    const isImpossible=currentPhase.name==='IMPOSSIBLE';
+    const lookAhead=isImpossible?40:18;
+    const cands=isImpossible
+      ?[a-step*5,a-step*3.5,a-step*2,a-step*1,a,a+step*1,a+step*2,a+step*3.5,a+step*5]
+      :[a-step*5,a-step*2.5,a,a+step*2.5,a+step*5];
+    let best=-Infinity,bestAngle=a,anyValid=false;
+    for(const ca of cands){
+      const {survived,landX,landY}=walkForward(c.x,c.y,ca,c,lookAhead);
+      if(survived<currentPhase.minSurvive) continue;
+      const openCells=floodFill(landX,landY,c,currentPhase.floodCap);
+      if(openCells<currentPhase.minOpen) continue;
+      anyValid=true;
+      let score=openCells*0.4;
+      const m=35;
+      if(landX<zoneSize+m||landX>W-zoneSize-m||landY<zoneSize+m||landY>H-zoneSize-m) score-=1000;
+      score-=trucePenalty(landX,landY);
+      if(player&&globalFrame>currentPhase.truce*0.4){
+        const px=player.x,py=player.y;
+        const distAfter=Math.hypot(landX-px,landY-py);
+        score-=distAfter*hw;
+        const lookFwd=isImpossible?45:28;
+        const pfx=px+Math.cos(player.angle)*STEP*lookFwd;
+        const pfy=py+Math.sin(player.angle)*STEP*lookFwd;
+        const dI=Math.hypot(landX-pfx,landY-pfy);
+        score-=dI*(hw*0.6);
+        if(dI<60) score+=600;
+        const atp=Math.atan2(py-c.y,px-c.x);
+        const diff=Math.abs(((ca-atp+Math.PI*3)%(Math.PI*2))-Math.PI);
+        if(diff<0.4) score+=350;
+        if(isImpossible){
+          const otherHunters=curves.filter(oc=>oc.alive&&oc!==c&&oc.player.type==='hunter');
+          otherHunters.forEach(oh=>{
+            const ohA=Math.atan2(py-oh.y,px-oh.x);
+            const myA=Math.atan2(py-c.y,px-c.x);
+            if(Math.abs(ohA-myA)<0.5){ const perp=ca+Math.PI/2; score+=Math.cos(perp-ca)*200; }
+          });
+          const {survived:ps,landX:plx,landY:ply}=walkForward(px,py,player.angle,player,30);
+          const playerOpen=floodFill(plx,ply,player,200);
+          if(playerOpen<50){ score+=(50-playerOpen)*8; score-=distAfter*(hw*0.8); }
+          const cutX=px+Math.cos(player.angle)*STEP*35;
+          const cutY=py+Math.sin(player.angle)*STEP*35;
+          score-=Math.hypot(landX-cutX,landY-cutY)*hw;
+        }
+        const distNow=Math.hypot(c.x-px,c.y-py);
+        if(distNow<80) score+=200-distAfter;
+      } else if(!player){
+        score+=openCells*3;
+      }
+      if(score>best){best=score;bestAngle=ca;}
+    }
+    if(!anyValid){
+      let fb=-1;
+      for(const ca of cands){
+        const {survived,landX,landY}=walkForward(c.x,c.y,ca,c,15);
+        if(survived<3) continue;
+        const open=floodFill(landX,landY,c,100);
+        if(open>fb){fb=open;bestAngle=ca;}
+      }
+    }
+    return Math.max(-step*5,Math.min(step*5,bestAngle-a));
+  }
+
+  function mkCurve(player,idx){
+    // Spawn in safe centre zone — never near edges
+    const minX=W*0.25, maxX=W*0.75;
+    const minY=H*0.25, maxY=H*0.75;
+    let x,y,tries=0;
+    do{
+      x=minX+Math.random()*(maxX-minX);
+      y=minY+Math.random()*(maxY-minY);
+      tries++;
+    }while(tries<100&&curves.some(c=>Math.hypot(c.x-x,c.y-y)<110));
+
+    // Always spawn pointing toward centre so first move is safe
+    const toCentreAngle=Math.atan2(H/2-y,W/2-x);
+    const angleSpread=Math.PI*0.5; // within 90deg of centre direction
+    const angle=toCentreAngle+(Math.random()-0.5)*angleSpread;
+
+    return{id:idx,player,x,y,angle,alive:true,
+      holeCD:HOLE_INT+Math.floor(Math.random()*HOLE_RND),
+      holeLen:0,invisible:false,ownFrame:0,
+      cachedTurn:0, reactionTimer:0};
+  }
+
+  function buildPhaseBar(){
+    const bar=document.getElementById('phase-bar');
+    bar.innerHTML='';
+    for(let i=1;i<=TOTAL_MATCHES;i++){
+      const phase=getPhase(i);
+      const seg=document.createElement('div');
+      seg.className='phase-seg';
+      seg.style.background=phase.color;
+      if(i<currentMatch) seg.classList.add('done');
+      else if(i===currentMatch) seg.classList.add('current');
+      bar.appendChild(seg);
+    }
+  }
+
+  function updateHUD(){
+    const alive=curves.filter(c=>c.alive).length;
+    document.getElementById('hud-alive').textContent=alive+' alive';
+    document.getElementById('hud-dots').innerHTML=curves.map(c=>{
+      const o=c.player.type==='hunter'?';outline:1.5px solid rgba(255,255,255,0.45);outline-offset:1px':'';
+      return `<div class="hdot" style="background:${c.player.color};opacity:${c.alive?1:0.15}${o}"></div>`;
+    }).join('');
+    const bal=document.getElementById('balance-display');
+    bal.textContent=(balance>=0?'+':'')+'£'+balance.toFixed(2);
+    bal.style.color=balance>0?'#4CFF6C':balance<0?'#FF4444':'rgba(255,255,255,0.6)';
+    document.getElementById('match-display').textContent=`Match ${currentMatch} / ${TOTAL_MATCHES}`;
+    document.getElementById('phase-display').textContent=currentPhase.name;
+    document.getElementById('phase-display').style.color=currentPhase.color;
+  }
+
+  function showElim(text,color){
+    const el=document.getElementById('elim-msg');
+    el.textContent=text;el.style.color=color||'#fff';el.style.opacity='1';
+    if(elimTO)clearTimeout(elimTO);
+    elimTO=setTimeout(()=>el.style.opacity='0',1800);
+  }
+
+  function endMatch(playerWon){
+    stopGame();
+    if(playerWon){ balance=Math.min(MAX_BALANCE,balance+MATCH_STAKE); wins++; }
+    else{ balance=balance-MATCH_STAKE; losses++; }
+    const mr=document.getElementById('match-result');
+    document.getElementById('mr-result').textContent=playerWon?'+£5':'-£5';
+    document.getElementById('mr-result').style.color=playerWon?'#4CFF6C':'#FF4444';
+    const bal=document.getElementById('mr-balance');
+    bal.textContent='Balance: '+(balance>=0?'+':'')+'£'+balance.toFixed(2);
+    bal.style.color=balance>0?'#4CFF6C':balance<0?'#FF4444':'rgba(255,255,255,0.6)';
+    if(currentMatch>=TOTAL_MATCHES){
+      document.getElementById('mr-match').textContent='Session complete — see your results';
+      document.getElementById('next-btn').textContent='See Results';
+    } else {
+      document.getElementById('mr-match').textContent=`Match ${currentMatch} of ${TOTAL_MATCHES} — Next: ${getPhase(currentMatch+1).name}`;
+      document.getElementById('next-btn').textContent='Next Match →';
+    }
+    mr.style.display='flex';
+  }
+
+  function showFinalResult(){
+    document.getElementById('match-result').style.display='none';
+    const cashout=Math.max(0,balance);
+    document.getElementById('final-title').textContent='Session Complete';
+    document.getElementById('final-title').style.color=cashout>0?'#FFD700':'rgba(255,255,255,0.8)';
+    document.getElementById('final-balance').textContent='£'+cashout.toFixed(2);
+    document.getElementById('final-balance').style.color=cashout>0?'#4CFF6C':'rgba(255,255,255,0.4)';
+    document.getElementById('final-sub').textContent=cashout>0?'You finished in profit — cash out your winnings':'No profit this session — better luck next time';
+    document.getElementById('final-summary').textContent=`${wins} wins / ${losses} losses across 20 matches`;
+    document.getElementById('cashout-btn').style.display=cashout>0?'block':'none';
+    document.getElementById('result-screen').style.display='flex';
+  }
+
+  function drawField(){
+    ctx.fillStyle='#0d0d1a';ctx.fillRect(0,0,W,H);
+    if(zoneSize>0){
+      ctx.fillStyle='rgba(255,50,50,0.12)';
+      ctx.fillRect(0,0,W,zoneSize);ctx.fillRect(0,H-zoneSize,W,zoneSize);
+      ctx.fillRect(0,zoneSize,zoneSize,H-zoneSize*2);ctx.fillRect(W-zoneSize,zoneSize,zoneSize,H-zoneSize*2);
+    }
+    ctx.strokeStyle='rgba(255,80,80,0.6)';ctx.lineWidth=2;
+    ctx.strokeRect(zoneSize,zoneSize,W-zoneSize*2,H-zoneSize*2);
+  }
+
+  function kill(c){
+    if(!c.alive)return;
+    c.alive=false;deadCount++;
+    updateHUD();
+    const remaining=curves.filter(x=>x.alive).length;
+    if(!c.player.isBot){
+      showElim('Eliminated!','#FF4444');
+      stopGame();
+      setTimeout(()=>endMatch(false),600);
+      return;
+    }
+    showElim(c.player.id+' out — '+remaining+' left',c.player.color);
+    if(remaining===1){
+      const last=curves.find(x=>x.alive);
+      if(last&&!last.player.isBot){ stopGame(); setTimeout(()=>endMatch(true),600); }
+    }
+    if(remaining===0) stopGame();
+  }
+
+  function stopGame(){
+    active=false;cancelAnimationFrame(animId);
+    if(zoneIv){clearInterval(zoneIv);zoneIv=null;}
+  }
+
+  function startZone(){
+    zoneSize=0;zoneTimer=30;
+    zoneIv=setInterval(()=>{
+      zoneTimer--;
+      if(zoneTimer<=0){zoneSize+=5;zoneTimer=12;curves.forEach(c=>{if(c.alive&&oob(c.x,c.y))kill(c);});}
+    },1000);
+  }
+
+  function loop(){
+    if(!active)return;
+    globalFrame++;
+    const step=currentPhase.D;
+    curves.forEach(c=>{
+      if(!c.alive)return;
+      c.ownFrame++;
+      if(c.player.isBot){
+        // Reaction delay — recalculate turn only every N frames (Easy=8, Moderate=4, etc)
+        const delay = currentPhase.reactionDelay||0;
+        if(c.reactionTimer<=0){
+          c.cachedTurn = c.player.type==='survivor'?survivorThink(c):hunterThink(c);
+          c.reactionTimer = delay;
+        } else {
+          c.reactionTimer--;
+        }
+        c.angle += c.cachedTurn;
+      } else {
+        if(keys['ArrowLeft'])c.angle-=step;
+        if(keys['ArrowRight'])c.angle+=step;
+      }
+      const px=c.x,py=c.y;
+      c.x+=STEP*Math.cos(c.angle);
+      c.y+=STEP*Math.sin(c.angle);
+      if(c.holeLen>0){c.invisible=true;c.holeLen--;}
+      else{
+        c.invisible=false;c.holeCD--;
+        if(c.holeCD<=0){c.holeCD=HOLE_INT+Math.floor(Math.random()*HOLE_RND);c.holeLen=HOLE_LEN;}
+      }
+      if(!c.invisible){
+        ctx.beginPath();ctx.strokeStyle=c.player.color;ctx.lineWidth=LINE_W;ctx.lineCap='round';
+        ctx.moveTo(px,py);ctx.lineTo(c.x,c.y);ctx.stroke();
+        const steps=Math.ceil(STEP*2);
+        for(let s=0;s<=steps;s++){
+          const t=s/steps;
+          setPixel(px+(c.x-px)*t,py+(c.y-py)*t,c.id,c.ownFrame);
+        }
+      }
+      if(!c.invisible&&collidesAt(c.x,c.y,c)) kill(c);
+    });
+    const alive=curves.filter(c=>c.alive);
+    if(alive.length<=1&&active){if(alive.length===1)kill(alive[0]);return;}
+    animId=requestAnimationFrame(loop);
+  }
+
+  function startMatch(){
+    currentPhase=getPhase(currentMatch);
+    pixelMap={};deadCount=0;zoneSize=0;globalFrame=0;curves=[];
+    PLAYERS.forEach((p,i)=>curves.push(mkCurve(p,i)));
+    buildPhaseBar();updateHUD();drawField();
+    let count=3;
+    const cd=document.getElementById('cd-msg');
+    cd.style.opacity='1';cd.textContent=count;
+    const t=setInterval(()=>{
+      count--;
+      if(count>0)cd.textContent=count;
+      else{clearInterval(t);cd.style.opacity='0';active=true;startZone();animId=requestAnimationFrame(loop);}
+    },1000);
+  }
+
+  function startSession(){
+    currentMatch=1;balance=0;wins=0;losses=0;
+    document.getElementById('overlay').style.display='none';
+    document.getElementById('result-screen').style.display='none';
+    startMatch();
+  }
+
+  document.getElementById('play-btn').addEventListener('click',startSession);
+  document.getElementById('next-btn').addEventListener('click',()=>{
+    document.getElementById('match-result').style.display='none';
+    if(currentMatch>=TOTAL_MATCHES){ showFinalResult(); }
+    else{ currentMatch++; startMatch(); }
+  });
+  document.getElementById('cashout-btn').addEventListener('click',()=>{
+    alert('Cashing out £'+Math.max(0,balance).toFixed(2)+'!\n\n(Connect your payment system here)');
+  });
+  document.getElementById('again-btn').addEventListener('click',()=>{
+    document.getElementById('result-screen').style.display='none';
+    startSession();
+  });
+
+  document.getElementById('solo-btn').addEventListener('click',()=>{
+    document.getElementById('mode-screen').style.display='none';
+    document.getElementById('overlay').style.display='flex';
+  });
+  document.getElementById('mp-btn').addEventListener('click',()=>{
+    document.getElementById('mode-screen').style.display='none';
+    document.getElementById('mp-placeholder').style.display='flex';
+  });
+  document.getElementById('mp-back-btn').addEventListener('click',()=>{
+    document.getElementById('mp-placeholder').style.display='none';
+    document.getElementById('mode-screen').style.display='flex';
+  });
+
+  drawField();
+})();
+</script>
 </body>
 </html>
