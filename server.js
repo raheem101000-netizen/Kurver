@@ -33,6 +33,8 @@ const PRIZE_POOL = 1000; // cents to winner
 const ZONE_INITIAL_DELAY = 30 * 30; // ticks
 const ZONE_SHRINK_INTERVAL = 12 * 30; // ticks
 const ZONE_SHRINK_AMOUNT = 5;
+const TOTAL_MATCHES = 10;
+const PLACEMENT_POINTS = [6, 4, 3, 2, 1, 0]; // indexed by (placement - 1)
 
 const COLORS = ['#e74c3c', '#3498db', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c'];
 
@@ -62,45 +64,53 @@ function pk(x, y) {
 
 // ── Game logic ────────────────────────────────────────────────────────────
 function createPlayer(id, name, colorIndex) {
-  const margin = 80;
   return {
     id,
     name,
     colorIndex,
     color: COLORS[colorIndex],
-    x: margin + Math.random() * (CANVAS_W - margin * 2),
-    y: margin + Math.random() * (CANVAS_H - margin * 2),
-    angle: Math.random() * Math.PI * 2,
+    x: CANVAS_W / 2,
+    y: CANVAS_H / 2,
+    angle: 0,
     alive: true,
     placement: 0,
     holeTimer: HOLE_INT + Math.floor(Math.random() * HOLE_RND),
     inHole: false,
     holeLen: 0,
     immTimer: SELF_IMM,
-    trail: [], // array of {x,y} drawn
+    trail: [],
     left: false,
     right: false,
   };
 }
 
-function createRoom(hostSocketId, hostName) {
+function freshZone() {
+  return { left: 0, top: 0, right: CANVAS_W, bottom: CANVAS_H };
+}
+
+function createRoom(hostSocketId, hostName, isPublic = false) {
   const code = genCode();
-  const room = {
+  return {
     code,
     hostId: hostSocketId,
+    hostName,
+    isPublic,
     state: 'lobby', // lobby | playing | results
-    players: {},     // socketId -> player
+    players: {},
     spectators: new Set(),
     gameLoop: null,
     pixelMap: {},
     tick: 0,
     aliveCount: 0,
-    zone: { x: CANVAS_W / 2, y: CANVAS_H / 2, r: Math.min(CANVAS_W, CANVAS_H) / 2 - 10 },
+    zone: freshZone(),
     zoneNextShrink: ZONE_INITIAL_DELAY,
     placements: [],
     rematchVotes: new Set(),
+    // session state
+    matchNumber: 0,
+    totalMatches: TOTAL_MATCHES,
+    scores: {},
   };
-  return room;
 }
 
 function startGame(room) {
@@ -108,18 +118,25 @@ function startGame(room) {
   room.pixelMap = {};
   room.tick = 0;
   room.placements = [];
-  room.zone = { x: CANVAS_W / 2, y: CANVAS_H / 2, r: Math.min(CANVAS_W, CANVAS_H) / 2 - 10 };
+  room.zone = freshZone();
   room.zoneNextShrink = ZONE_INITIAL_DELAY;
+  room.matchNumber++;
 
   const playerIds = Object.keys(room.players).filter(id => !room.spectators.has(id));
   room.aliveCount = playerIds.length;
 
-  playerIds.forEach((id, i) => {
+  // Initialise score entry for any new player
+  for (const id of playerIds) {
+    if (!(id in room.scores)) room.scores[id] = 0;
+  }
+
+  // Spawn inside safe centre area, angle pointing toward canvas centre
+  playerIds.forEach((id) => {
     const p = room.players[id];
-    const margin = 80;
-    p.x = margin + Math.random() * (CANVAS_W - margin * 2);
-    p.y = margin + Math.random() * (CANVAS_H - margin * 2);
-    p.angle = Math.random() * Math.PI * 2;
+    p.x = CANVAS_W * 0.3 + Math.random() * CANVAS_W * 0.4;
+    p.y = CANVAS_H * 0.3 + Math.random() * CANVAS_H * 0.4;
+    p.angle = Math.atan2(CANVAS_H / 2 - p.y, CANVAS_W / 2 - p.x)
+            + (Math.random() - 0.5) * (Math.PI / 3);
     p.alive = true;
     p.placement = 0;
     p.holeTimer = HOLE_INT + Math.floor(Math.random() * HOLE_RND);
@@ -135,6 +152,8 @@ function startGame(room) {
     canvasW: CANVAS_W,
     canvasH: CANVAS_H,
     players: serializePlayers(room),
+    matchNumber: room.matchNumber,
+    totalMatches: room.totalMatches,
   });
 
   room.gameLoop = setInterval(() => gameTick(room), TICK_MS);
@@ -170,28 +189,28 @@ function gameTick(room) {
   room.tick++;
   const t = room.tick;
 
-  // Zone shrink
+  // Zone shrink — rectangular, closes in 5px per side each interval
   if (t >= room.zoneNextShrink) {
-    room.zone.r = Math.max(10, room.zone.r - ZONE_SHRINK_AMOUNT);
+    room.zone.left  = Math.min(room.zone.left  + ZONE_SHRINK_AMOUNT, CANVAS_W / 2);
+    room.zone.top   = Math.min(room.zone.top   + ZONE_SHRINK_AMOUNT, CANVAS_H / 2);
+    room.zone.right = Math.max(room.zone.right - ZONE_SHRINK_AMOUNT, CANVAS_W / 2);
+    room.zone.bottom = Math.max(room.zone.bottom - ZONE_SHRINK_AMOUNT, CANVAS_H / 2);
     room.zoneNextShrink += ZONE_SHRINK_INTERVAL;
   }
 
   const alivePlayers = Object.values(room.players).filter(p => p.alive);
-  const totalPlayers = Object.values(room.players).filter(p => !room.spectators.has(p.id)).length;
 
-  // Move each alive player
   for (const p of alivePlayers) {
     const TURN = 0.04;
-    if (p.left) p.angle -= TURN;
+    if (p.left)  p.angle -= TURN;
     if (p.right) p.angle += TURN;
 
     const nx = p.x + Math.cos(p.angle) * STEP;
     const ny = p.y + Math.sin(p.angle) * STEP;
 
-    // Zone collision
-    const dx = nx - room.zone.x;
-    const dy = ny - room.zone.y;
-    if (Math.sqrt(dx * dx + dy * dy) > room.zone.r) {
+    // Rectangular zone collision
+    if (nx < room.zone.left || nx > room.zone.right ||
+        ny < room.zone.top  || ny > room.zone.bottom) {
       eliminatePlayer(room, p, room.aliveCount);
       continue;
     }
@@ -203,22 +222,19 @@ function gameTick(room) {
       p.holeLen = HOLE_LEN;
       p.holeTimer = HOLE_INT + Math.floor(Math.random() * HOLE_RND);
     }
-
     if (p.inHole) {
       p.holeLen--;
       if (p.holeLen <= 0) p.inHole = false;
     }
 
-    // Collision detection (only when not in hole)
+    // Trail collision (skip while in hole)
     if (!p.inHole) {
       const checkRadius = Math.ceil(LINE_W / 2);
       let hit = false;
       for (let cx = -checkRadius; cx <= checkRadius && !hit; cx++) {
         for (let cy = -checkRadius; cy <= checkRadius && !hit; cy++) {
-          const key = pk(nx + cx, ny + cy);
-          const owner = room.pixelMap[key];
+          const owner = room.pixelMap[pk(nx + cx, ny + cy)];
           if (owner !== undefined) {
-            // self immunity
             if (owner === p.id && p.immTimer > 0) continue;
             hit = true;
           }
@@ -230,12 +246,10 @@ function gameTick(room) {
       }
     }
 
-    // Move
     p.x = nx;
     p.y = ny;
     if (p.immTimer > 0) p.immTimer--;
 
-    // Paint pixels
     if (!p.inHole) {
       for (let cx = -Math.floor(LINE_W / 2); cx <= Math.floor(LINE_W / 2); cx++) {
         for (let cy = -Math.floor(LINE_W / 2); cy <= Math.floor(LINE_W / 2); cy++) {
@@ -246,27 +260,22 @@ function gameTick(room) {
     }
   }
 
-  // Check win condition
+  // Win condition
   const stillAlive = Object.values(room.players).filter(p => p.alive && !room.spectators.has(p.id));
   if (stillAlive.length <= 1) {
-    if (stillAlive.length === 1) {
-      stillAlive[0].placement = 1;
-    }
+    if (stillAlive.length === 1) stillAlive[0].placement = 1;
     endGame(room);
     return;
   }
 
-  // Broadcast state
-  const state = {
+  io.to(room.code).emit('state', {
     tick: t,
     zone: room.zone,
     players: serializePlayers(room),
     newPixels: buildNewPixels(room),
-  };
-  io.to(room.code).emit('state', state);
+  });
 }
 
-// We only send new pixels each tick (delta), not full trail
 function buildNewPixels(room) {
   const pixels = [];
   for (const p of Object.values(room.players)) {
@@ -285,48 +294,93 @@ async function endGame(room) {
   room.state = 'results';
 
   const playerList = Object.values(room.players).filter(p => !room.spectators.has(p.id));
-  playerList.sort((a, b) => a.placement - b.placement);
+  playerList.sort((a, b) => (a.placement || 99) - (b.placement || 99));
 
-  const winner = playerList.find(p => p.placement === 1);
-
-  const result = {
-    roomCode: room.code,
-    timestamp: new Date().toISOString(),
-    players: playerList.map(p => ({ id: p.id, name: p.name, placement: p.placement })),
-    winner: winner ? { id: winner.id, name: winner.name } : null,
-    prize: PRIZE_POOL,
-  };
-
-  saveResult(result);
-
-  // Stripe payout to winner (if they have a connected account)
-  let payoutStatus = 'pending';
-  if (winner && winner.stripeAccountId && process.env.STRIPE_SECRET_KEY) {
-    try {
-      await stripe.transfers.create({
-        amount: PRIZE_POOL,
-        currency: 'usd',
-        destination: winner.stripeAccountId,
-        transfer_group: room.code,
-      });
-      payoutStatus = 'sent';
-    } catch (e) {
-      payoutStatus = 'failed';
-    }
+  // Award match points
+  for (const p of playerList) {
+    const idx = Math.max(0, (p.placement || playerList.length) - 1);
+    const pts = PLACEMENT_POINTS[idx] ?? 0;
+    room.scores[p.id] = (room.scores[p.id] || 0) + pts;
   }
 
-  io.to(room.code).emit('game:results', {
-    players: playerList.map(p => ({
-      id: p.id,
-      name: p.name,
-      color: p.color,
-      placement: p.placement,
-    })),
-    winner: winner ? { id: winner.id, name: winner.name, color: winner.color } : null,
-    prize: PRIZE_POOL,
-    payoutStatus,
+  // Build cumulative standings sorted by points desc
+  const standings = Object.entries(room.scores)
+    .map(([id, points]) => {
+      const p = room.players[id];
+      return { id, name: p ? p.name : '?', color: p ? p.color : '#aaa', points };
+    })
+    .sort((a, b) => b.points - a.points);
+
+  // Emit per-match result (brief overlay)
+  io.to(room.code).emit('match:end', {
+    matchNumber: room.matchNumber,
+    totalMatches: room.totalMatches,
+    placements: playerList.map(p => {
+      const idx = Math.max(0, (p.placement || playerList.length) - 1);
+      return {
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        placement: p.placement || playerList.length,
+        pointsEarned: PLACEMENT_POINTS[idx] ?? 0,
+      };
+    }),
+    standings,
   });
+
+  if (room.matchNumber < room.totalMatches) {
+    // 5-second pause, then auto-start next match
+    setTimeout(() => {
+      if (rooms[room.code]) startGame(room);
+    }, 5000);
+  } else {
+    // Session complete — payout and final results
+    const sessionWinner = standings[0] || null;
+    const winnerPlayer = sessionWinner ? room.players[sessionWinner.id] : null;
+
+    saveResult({
+      roomCode: room.code,
+      timestamp: new Date().toISOString(),
+      standings,
+      winner: sessionWinner,
+    });
+
+    let payoutStatus = 'pending';
+    if (winnerPlayer && winnerPlayer.stripeAccountId && process.env.STRIPE_SECRET_KEY) {
+      try {
+        await stripe.transfers.create({
+          amount: PRIZE_POOL,
+          currency: 'usd',
+          destination: winnerPlayer.stripeAccountId,
+          transfer_group: room.code,
+        });
+        payoutStatus = 'sent';
+      } catch {
+        payoutStatus = 'failed';
+      }
+    }
+
+    io.to(room.code).emit('session:end', {
+      standings,
+      winner: sessionWinner,
+      prize: PRIZE_POOL,
+      payoutStatus,
+    });
+  }
 }
+
+// ── Room browser ─────────────────────────────────────────────────────────
+app.get('/api/rooms', (_req, res) => {
+  const list = Object.values(rooms)
+    .filter(r => r.isPublic && r.state === 'lobby')
+    .map(r => ({
+      code: r.code,
+      hostName: r.hostName,
+      players: Object.keys(r.players).filter(id => !r.spectators.has(id)).length,
+      maxPlayers: MAX_PLAYERS,
+    }));
+  res.json(list);
+});
 
 // ── Stripe payment session ────────────────────────────────────────────────
 app.post('/api/create-payment', async (req, res) => {
@@ -341,7 +395,6 @@ app.post('/api/create-payment', async (req, res) => {
   if (playerCount >= MAX_PLAYERS) return res.status(400).json({ error: 'room full' });
 
   if (!process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY === 'sk_test_placeholder') {
-    // Dev mode: skip payment
     return res.json({ sessionId: null, devMode: true });
   }
 
@@ -390,11 +443,10 @@ app.post('/webhook', express.raw({ type: 'application/json' }), (req, res) => {
 
 // ── Socket.io ─────────────────────────────────────────────────────────────
 io.on('connection', (socket) => {
-  socket.on('room:create', ({ name }) => {
-    const room = createRoom(socket.id, name);
+  socket.on('room:create', ({ name, isPublic }) => {
+    const room = createRoom(socket.id, name, !!isPublic);
     rooms[room.code] = room;
-    const colorIndex = 0;
-    room.players[socket.id] = createPlayer(socket.id, name, colorIndex);
+    room.players[socket.id] = createPlayer(socket.id, name, 0);
     room.players[socket.id].isHost = true;
     socket.join(room.code);
     socket.data.roomCode = room.code;
@@ -404,7 +456,7 @@ io.on('connection', (socket) => {
       code: room.code,
       isHost: true,
       playerId: socket.id,
-      colorIndex,
+      colorIndex: 0,
       players: serializeLobby(room),
     });
   });
@@ -412,7 +464,8 @@ io.on('connection', (socket) => {
   socket.on('room:join', ({ code, name, spectator }) => {
     const room = rooms[code];
     if (!room) return socket.emit('error', { msg: 'Room not found' });
-    if (room.state === 'playing' && !spectator) return socket.emit('error', { msg: 'Game in progress — join as spectator?' });
+    if (room.state === 'playing' && !spectator)
+      return socket.emit('error', { msg: 'Game in progress — join as spectator?' });
 
     socket.join(code);
     socket.data.roomCode = code;
@@ -422,13 +475,10 @@ io.on('connection', (socket) => {
       room.spectators.add(socket.id);
       room.players[socket.id] = { id: socket.id, name, color: '#aaaaaa', colorIndex: -1, spectator: true };
       socket.emit('room:joined', {
-        code,
-        isHost: false,
-        spectator: true,
+        code, isHost: false, spectator: true,
         playerId: socket.id,
         players: serializeLobby(room),
       });
-      // Send current trail data to spectator
       socket.emit('game:spectate', buildSpectatePacket(room));
     } else {
       const playerCount = Object.keys(room.players).filter(id => !room.spectators.has(id)).length;
@@ -438,17 +488,14 @@ io.on('connection', (socket) => {
       const colorIndex = [0,1,2,3,4,5].find(i => !usedColors.includes(i)) ?? 0;
 
       room.players[socket.id] = createPlayer(socket.id, name, colorIndex);
-      const isHost = room.hostId === socket.id;
-      room.players[socket.id].isHost = isHost;
 
       socket.emit('room:joined', {
         code,
-        isHost,
+        isHost: room.hostId === socket.id,
         playerId: socket.id,
         colorIndex,
         players: serializeLobby(room),
       });
-
       socket.to(code).emit('lobby:update', { players: serializeLobby(room) });
     }
   });
@@ -485,7 +532,9 @@ io.on('connection', (socket) => {
 
     if (room.rematchVotes.size >= nonSpectators.length) {
       room.rematchVotes.clear();
-      // Countdown then restart
+      // Reset session state for a fresh 10-match run
+      room.matchNumber = 0;
+      room.scores = {};
       io.to(code).emit('rematch:countdown', { seconds: 10 });
       let count = 10;
       const cd = setInterval(() => {
@@ -557,7 +606,7 @@ function buildSpectatePacket(room) {
     canvasH: CANVAS_H,
     players: serializePlayers(room),
     zone: room.zone,
-    pixelMap: room.pixelMap, // full trail for late-join spectators
+    pixelMap: room.pixelMap,
   };
 }
 

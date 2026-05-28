@@ -51,6 +51,67 @@
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .row label { color: #888; font-size: 0.8rem; letter-spacing: 1px; }
 
+  /* ── Room browser ── */
+  #rooms-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    width: 360px;
+  }
+  #rooms-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+  }
+  #rooms-header span {
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    color: #555;
+  }
+  #rooms-refresh {
+    background: none;
+    border: none;
+    color: #555;
+    font-family: inherit;
+    font-size: 0.7rem;
+    cursor: pointer;
+    letter-spacing: 1px;
+    padding: 0;
+  }
+  #rooms-refresh:hover { color: #f0f0f0; }
+  #rooms-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+  .room-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    background: #1a1a1a;
+    border-left: 3px solid #333;
+  }
+  .room-card.full { opacity: 0.4; }
+  .room-card .rc-host { flex: 1; font-size: 0.9rem; }
+  .room-card .rc-count {
+    font-size: 0.8rem;
+    color: #888;
+    min-width: 32px;
+    text-align: right;
+  }
+  .room-card .rc-count.full { color: #e74c3c; }
+  .btn.sm {
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    letter-spacing: 1px;
+  }
+  #rooms-empty { font-size: 0.8rem; color: #444; text-align: center; padding: 12px 0; }
+  .divider {
+    width: 360px;
+    border: none;
+    border-top: 1px solid #222;
+    margin: 4px 0;
+  }
+
   /* ── Lobby ── */
   #lobby {
     min-height: 100vh;
@@ -78,9 +139,7 @@
     background: #1a1a1a;
     border-left: 3px solid transparent;
   }
-  .player-row .dot {
-    width: 14px; height: 14px; border-radius: 50%;
-  }
+  .player-row .dot { width: 14px; height: 14px; border-radius: 50%; }
   .player-row .pname { flex: 1; font-size: 0.9rem; }
   .player-row .tag { font-size: 0.7rem; color: #888; margin-left: auto; }
   #lobby-status { font-size: 0.8rem; color: #888; }
@@ -94,6 +153,7 @@
     justify-content: center;
     background: #000;
     gap: 0;
+    position: relative;
   }
   #hud {
     width: 800px;
@@ -111,7 +171,58 @@
   #canvas { display: block; border: 1px solid #222; }
   #zone-timer { font-size: 0.75rem; color: #e74c3c; }
 
-  /* ── Results ── */
+  /* ── Match overlay (between matches) ── */
+  #match-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(13,13,13,0.9);
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+  }
+  #match-overlay.active { display: flex; }
+  #mo-content {
+    width: 520px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  #mo-title {
+    font-size: 1.3rem;
+    letter-spacing: 4px;
+    color: #e74c3c;
+    text-align: center;
+  }
+  .mo-section-label {
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: #555;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .mo-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 10px;
+    background: #1a1a1a;
+  }
+  .mo-place { width: 32px; font-size: 0.85rem; color: #888; }
+  .mo-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .mo-name { flex: 1; font-size: 0.9rem; }
+  .mo-pts { font-size: 0.85rem; color: #f39c12; min-width: 48px; text-align: right; }
+  #mo-next {
+    text-align: center;
+    font-size: 0.8rem;
+    color: #555;
+    letter-spacing: 2px;
+    margin-top: 4px;
+  }
+  .mo-cols { display: flex; gap: 24px; }
+  .mo-cols > div { flex: 1; }
+
+  /* ── Results (session end) ── */
   #results {
     min-height: 100vh;
     flex-direction: column;
@@ -119,15 +230,16 @@
     justify-content: center;
     gap: 20px;
   }
-  #results h2 { font-size: 1.8rem; letter-spacing: 4px; color: #f0f0f0; }
-  .result-list { display: flex; flex-direction: column; gap: 8px; width: 320px; }
+  #results-title { font-size: 1.8rem; letter-spacing: 4px; color: #f0f0f0; }
+  .result-list { display: flex; flex-direction: column; gap: 8px; width: 360px; }
   .result-row {
-    display: flex; align-items: center; gap: 12px;
+    display: flex; align-items: center; gap: 10px;
     padding: 10px 14px; background: #1a1a1a;
     border-left: 3px solid transparent;
   }
-  .result-row .place { font-size: 1.2rem; width: 28px; text-align: center; }
+  .result-row .place { font-size: 1.1rem; width: 28px; text-align: center; }
   .result-row .rname { flex: 1; }
+  .result-row .r-pts { font-size: 0.9rem; color: #f39c12; }
   .result-row.winner { border-color: #f39c12; }
   .result-row.winner .place { color: #f39c12; }
   #winner-banner { text-align: center; }
@@ -149,6 +261,7 @@
   @media (max-width: 840px) {
     #hud, #canvas { width: 100vw !important; }
     #canvas { height: auto !important; }
+    #mo-content { width: 95vw; }
   }
 </style>
 </head>
@@ -167,7 +280,8 @@
       <input id="home-name" type="text" placeholder="enter name" maxlength="16" autocomplete="off">
     </div>
     <div class="row">
-      <button class="btn primary" id="btn-create">CREATE ROOM</button>
+      <button class="btn primary" id="btn-create-public">CREATE PUBLIC</button>
+      <button class="btn" id="btn-create-private">CREATE PRIVATE</button>
     </div>
     <div class="row">
       <input id="join-code" type="text" placeholder="KURVE-XXXX" maxlength="10" style="width:180px" autocomplete="off">
@@ -175,6 +289,18 @@
       <button class="btn" id="btn-spectate">WATCH</button>
     </div>
     <div id="home-error" style="color:#e74c3c;font-size:0.85rem;min-height:20px;"></div>
+
+    <hr class="divider">
+
+    <div id="rooms-section">
+      <div id="rooms-header">
+        <span>OPEN ROOMS</span>
+        <button id="rooms-refresh">↻ refresh</button>
+      </div>
+      <div id="rooms-list">
+        <div id="rooms-empty">No open rooms right now</div>
+      </div>
+    </div>
   </div>
 
   <!-- Lobby -->
@@ -195,17 +321,35 @@
       <div id="zone-timer"></div>
     </div>
     <canvas id="canvas" width="800" height="600"></canvas>
+
+    <!-- Between-match overlay -->
+    <div id="match-overlay">
+      <div id="mo-content">
+        <div id="mo-title"></div>
+        <div class="mo-cols">
+          <div>
+            <div class="mo-section-label">Match result</div>
+            <div id="mo-placements"></div>
+          </div>
+          <div>
+            <div class="mo-section-label">Standings</div>
+            <div id="mo-standings"></div>
+          </div>
+        </div>
+        <div id="mo-next"></div>
+      </div>
+    </div>
   </div>
 
-  <!-- Results -->
+  <!-- Session results -->
   <div id="results">
-    <h2>RESULTS</h2>
+    <div id="results-title">SESSION COMPLETE</div>
     <div id="winner-banner"></div>
     <div class="result-list" id="result-list"></div>
     <div id="rematch-status"></div>
     <div id="rematch-countdown"></div>
     <div class="row">
-      <button class="btn primary" id="btn-rematch">REMATCH</button>
+      <button class="btn primary" id="btn-rematch">NEW SESSION</button>
       <button class="btn" id="btn-home">MAIN MENU</button>
     </div>
   </div>
