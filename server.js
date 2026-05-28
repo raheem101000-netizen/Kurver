@@ -371,7 +371,8 @@ async function endGame(room) {
 
 // ── Room browser ─────────────────────────────────────────────────────────
 app.get('/api/rooms', (_req, res) => {
-  const list = Object.values(rooms)
+  const all = Object.values(rooms);
+  const list = all
     .filter(r => r.isPublic && r.state === 'lobby')
     .map(r => ({
       code: r.code,
@@ -379,6 +380,7 @@ app.get('/api/rooms', (_req, res) => {
       players: Object.keys(r.players).filter(id => !r.spectators.has(id)).length,
       maxPlayers: MAX_PLAYERS,
     }));
+  console.log(`[api/rooms] total_rooms=${all.length} public_lobby=${list.length}`);
   res.json(list);
 });
 
@@ -451,6 +453,7 @@ io.on('connection', (socket) => {
     socket.join(room.code);
     socket.data.roomCode = room.code;
     socket.data.name = name;
+    console.log(`[room:create] code=${room.code} host="${name}" public=${room.isPublic} total_rooms=${Object.keys(rooms).length}`);
 
     socket.emit('room:joined', {
       code: room.code,
@@ -462,10 +465,11 @@ io.on('connection', (socket) => {
   });
 
   socket.on('room:join', ({ code, name, spectator }) => {
+    console.log(`[room:join] code="${code}" name="${name}" spectator=${spectator} exists=${!!rooms[code]}`);
     const room = rooms[code];
-    if (!room) return socket.emit('error', { msg: 'Room not found' });
+    if (!room) return socket.emit('game:error', { msg: 'Room not found' });
     if (room.state === 'playing' && !spectator)
-      return socket.emit('error', { msg: 'Game in progress — join as spectator?' });
+      return socket.emit('game:error', { msg: 'Game in progress — join as spectator?' });
 
     socket.join(code);
     socket.data.roomCode = code;
@@ -482,7 +486,7 @@ io.on('connection', (socket) => {
       socket.emit('game:spectate', buildSpectatePacket(room));
     } else {
       const playerCount = Object.keys(room.players).filter(id => !room.spectators.has(id)).length;
-      if (playerCount >= MAX_PLAYERS) return socket.emit('error', { msg: 'Room is full' });
+      if (playerCount >= MAX_PLAYERS) return socket.emit('game:error', { msg: 'Room is full' });
 
       const usedColors = Object.values(room.players).map(p => p.colorIndex);
       const colorIndex = [0,1,2,3,4,5].find(i => !usedColors.includes(i)) ?? 0;
@@ -504,10 +508,10 @@ io.on('connection', (socket) => {
     const code = socket.data.roomCode;
     const room = rooms[code];
     if (!room) return;
-    if (room.hostId !== socket.id) return socket.emit('error', { msg: 'Only host can start' });
+    if (room.hostId !== socket.id) return socket.emit('game:error', { msg: 'Only host can start' });
 
     const playerCount = Object.keys(room.players).filter(id => !room.spectators.has(id)).length;
-    if (playerCount < 2) return socket.emit('error', { msg: 'Need at least 2 players' });
+    if (playerCount < 2) return socket.emit('game:error', { msg: 'Need at least 2 players' });
 
     startGame(room);
   });

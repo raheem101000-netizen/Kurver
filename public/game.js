@@ -47,13 +47,22 @@
 
   // ── Socket ────────────────────────────────────────────────────────────────
   function connect() {
-    if (socket && socket.connected) return;
+    if (socket) {
+      // Reuse existing socket — just reconnect it, handlers are already registered
+      if (!socket.connected) socket.connect();
+      return;
+    }
     socket = io({ transports: ['websocket', 'polling'] });
 
-    socket.on('connect', () => {});
-    socket.on('disconnect', () => setError('home', 'Disconnected from server.'));
+    socket.on('connect', () => { console.log('[socket] connected', socket.id); });
+    socket.on('disconnect', (reason) => {
+      console.log('[socket] disconnected', reason);
+      // Only show error for unexpected disconnects, not manual ones
+      if (reason !== 'io client disconnect') setError('home', 'Disconnected from server.');
+    });
 
-    socket.on('error', ({ msg }) => {
+    socket.on('game:error', ({ msg }) => {
+      console.warn('[game:error]', msg);
       setError('home', msg);
       setError('lobby', msg);
     });
@@ -357,9 +366,10 @@
     try {
       const res = await fetch('/api/rooms');
       const rooms = await res.json();
+      console.log('[loadRooms]', rooms.length, 'public rooms:', rooms.map(r => r.code));
       renderRooms(rooms);
-    } catch {
-      // silently ignore — network may not be ready on first paint
+    } catch (err) {
+      console.error('[loadRooms] fetch failed:', err);
     }
   }
 
@@ -385,6 +395,7 @@
           if (!name) return setError('home', 'Enter your name first');
           myName = name;
           connect();
+          console.log('[rooms browser] joining', r.code);
           socket.emit('room:join', { code: r.code, name, spectator: false });
         });
       }
@@ -411,17 +422,18 @@
 
   $('btn-join').addEventListener('click', () => {
     const name = $('home-name').value.trim();
-    const code = $('join-code').value.trim().toUpperCase();
+    const code = normaliseCode($('join-code').value);
     if (!name) return setError('home', 'Enter your name');
     if (!code) return setError('home', 'Enter a room code');
     myName = name;
     connect();
+    console.log('[join] emitting room:join', code);
     socket.emit('room:join', { code, name, spectator: false });
   });
 
   $('btn-spectate').addEventListener('click', () => {
     const name = $('home-name').value.trim() || 'Spectator';
-    const code = $('join-code').value.trim().toUpperCase();
+    const code = normaliseCode($('join-code').value);
     if (!code) return setError('home', 'Enter a room code to watch');
     myName = name;
     connect();
@@ -433,7 +445,7 @@
   });
 
   $('btn-leave-lobby').addEventListener('click', () => {
-    if (socket) socket.disconnect();
+    if (socket) { socket.disconnect(); socket = null; }
     show('home');
   });
 
@@ -462,6 +474,12 @@
   $('rooms-refresh').addEventListener('click', loadRooms);
 
   // ── Misc ──────────────────────────────────────────────────────────────────
+  function normaliseCode(raw) {
+    let c = raw.trim().toUpperCase();
+    if (c && !c.startsWith('KURVE-')) c = 'KURVE-' + c;
+    return c;
+  }
+
   function copyCode(code) {
     navigator.clipboard.writeText(code).catch(() => {});
     const el = $('room-code-display');
