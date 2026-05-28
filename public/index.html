@@ -6,259 +6,106 @@
 <title>Kurve BR</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { background: #0d0d0d; color: #f0f0f0; font-family: 'Courier New', monospace; }
+  body { background: #0d0d1a; color: #f0f0f0; font-family: 'Courier New', monospace; }
 
   #screens > div { display: none; }
   #screens > div.active { display: flex; }
 
-  /* ── Home ── */
-  #home {
-    min-height: 100vh;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 24px;
-  }
+  /* Home */
+  #home { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
   #home h1 { font-size: 3rem; letter-spacing: 6px; color: #e74c3c; text-shadow: 0 0 20px #e74c3c88; }
   #home p { color: #888; font-size: 0.9rem; }
+
   .btn {
-    padding: 12px 32px;
-    border: 2px solid currentColor;
-    background: transparent;
-    color: #f0f0f0;
-    font-family: inherit;
-    font-size: 1rem;
-    cursor: pointer;
-    letter-spacing: 2px;
-    transition: background 0.15s, color 0.15s;
+    padding: 12px 32px; border: 2px solid currentColor; background: transparent;
+    color: #f0f0f0; font-family: inherit; font-size: 1rem; cursor: pointer;
+    letter-spacing: 2px; transition: background 0.15s, color 0.15s;
   }
-  .btn:hover { background: #f0f0f0; color: #0d0d0d; }
+  .btn:hover { background: #f0f0f0; color: #0d0d1a; }
   .btn:disabled { opacity: 0.35; cursor: default; }
   .btn:disabled:hover { background: transparent; color: #f0f0f0; }
   .btn.primary { color: #e74c3c; border-color: #e74c3c; }
-  .btn.primary:hover { background: #e74c3c; color: #0d0d0d; }
+  .btn.primary:hover { background: #e74c3c; color: #0d0d1a; }
+  .btn.sm { padding: 6px 14px; font-size: 0.75rem; letter-spacing: 1px; }
+
   input[type=text] {
-    background: #1a1a1a;
-    border: 1px solid #333;
-    color: #f0f0f0;
-    padding: 10px 16px;
-    font-family: inherit;
-    font-size: 1rem;
-    width: 260px;
-    text-align: center;
+    background: #1a1a2e; border: 1px solid #333; color: #f0f0f0;
+    padding: 10px 16px; font-family: inherit; font-size: 1rem; width: 260px; text-align: center;
   }
   input[type=text]:focus { outline: none; border-color: #e74c3c; }
   .row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center; }
   .row label { color: #888; font-size: 0.8rem; letter-spacing: 1px; }
+  .divider { width: 360px; border: none; border-top: 1px solid #222; margin: 4px 0; }
 
-  /* ── Room browser ── */
-  #rooms-section {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 8px;
-    width: 360px;
-  }
-  #rooms-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    width: 100%;
-  }
-  #rooms-header span {
-    font-size: 0.7rem;
-    letter-spacing: 3px;
-    color: #555;
-  }
-  #rooms-refresh {
-    background: none;
-    border: none;
-    color: #555;
-    font-family: inherit;
-    font-size: 0.7rem;
-    cursor: pointer;
-    letter-spacing: 1px;
-    padding: 0;
-  }
+  /* Room browser */
+  #rooms-section { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 360px; }
+  #rooms-header { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+  #rooms-header span { font-size: 0.7rem; letter-spacing: 3px; color: #555; }
+  #rooms-refresh { background: none; border: none; color: #555; font-family: inherit; font-size: 0.7rem; cursor: pointer; letter-spacing: 1px; padding: 0; }
   #rooms-refresh:hover { color: #f0f0f0; }
   #rooms-list { width: 100%; display: flex; flex-direction: column; gap: 6px; }
-  .room-card {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 9px 12px;
-    background: #1a1a1a;
-    border-left: 3px solid #333;
-  }
+  .room-card { display: flex; align-items: center; gap: 12px; padding: 9px 12px; background: #1a1a2e; border-left: 3px solid #333; }
   .room-card.full { opacity: 0.4; }
   .room-card .rc-host { flex: 1; font-size: 0.9rem; }
-  .room-card .rc-count {
-    font-size: 0.8rem;
-    color: #888;
-    min-width: 32px;
-    text-align: right;
-  }
+  .room-card .rc-count { font-size: 0.8rem; color: #888; min-width: 32px; text-align: right; }
   .room-card .rc-count.full { color: #e74c3c; }
-  .btn.sm {
-    padding: 6px 14px;
-    font-size: 0.75rem;
-    letter-spacing: 1px;
-  }
   #rooms-empty { font-size: 0.8rem; color: #444; text-align: center; padding: 12px 0; }
-  .divider {
-    width: 360px;
-    border: none;
-    border-top: 1px solid #222;
-    margin: 4px 0;
-  }
 
-  /* ── Lobby ── */
-  #lobby {
-    min-height: 100vh;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-  }
+  /* Lobby */
+  #lobby { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
   #lobby h2 { font-size: 1.4rem; letter-spacing: 3px; color: #e74c3c; }
-  #room-code-display {
-    font-size: 2rem;
-    letter-spacing: 6px;
-    color: #f0f0f0;
-    cursor: pointer;
-    border-bottom: 1px dashed #555;
-    padding-bottom: 4px;
-  }
-  #room-code-display:hover::after { content: ' 📋'; font-size: 1rem; }
+  #room-code-display { font-size: 2rem; letter-spacing: 6px; color: #f0f0f0; cursor: pointer; border-bottom: 1px dashed #555; padding-bottom: 4px; }
+  #room-code-display:hover::after { content: ' \1F4CB'; font-size: 1rem; }
   .player-list { display: flex; flex-direction: column; gap: 8px; width: 300px; }
-  .player-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
-    background: #1a1a1a;
-    border-left: 3px solid transparent;
-  }
+  .player-row { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #1a1a2e; border-left: 3px solid transparent; }
   .player-row .dot { width: 14px; height: 14px; border-radius: 50%; }
   .player-row .pname { flex: 1; font-size: 0.9rem; }
-  .player-row .tag { font-size: 0.7rem; color: #888; margin-left: auto; }
+  .player-row .tag { font-size: 0.7rem; color: #888; margin-left: 4px; }
   #lobby-status { font-size: 0.8rem; color: #888; }
   #lobby-error { color: #e74c3c; font-size: 0.85rem; min-height: 20px; }
 
-  /* ── Game ── */
-  #game {
-    min-height: 100vh;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background: #000;
-    gap: 0;
-    position: relative;
-  }
-  #hud {
-    width: 800px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 6px 0;
-    font-size: 0.75rem;
-    color: #888;
-  }
-  #hud-players { display: flex; gap: 12px; }
+  /* Game */
+  #game { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; background: #000; gap: 0; position: relative; }
+  #hud { width: 680px; display: flex; justify-content: space-between; align-items: center; padding: 6px 0; font-size: 0.75rem; color: #888; }
+  #hud-players { display: flex; gap: 12px; flex-wrap: wrap; }
   .hud-p { display: flex; align-items: center; gap: 4px; }
   .hud-p .dot { width: 8px; height: 8px; border-radius: 50%; }
   .hud-p.dead { opacity: 0.3; text-decoration: line-through; }
   #canvas { display: block; border: 1px solid #222; }
   #zone-timer { font-size: 0.75rem; color: #e74c3c; }
 
-  /* ── Match overlay (between matches) ── */
-  #match-overlay {
-    display: none;
-    position: fixed;
-    inset: 0;
-    background: rgba(13,13,13,0.9);
-    align-items: center;
-    justify-content: center;
-    z-index: 50;
-  }
+  /* Match overlay */
+  #match-overlay { display: none; position: fixed; inset: 0; background: rgba(13,13,26,0.92); align-items: center; justify-content: center; z-index: 50; }
   #match-overlay.active { display: flex; }
-  #mo-content {
-    width: 520px;
-    display: flex;
-    flex-direction: column;
-    gap: 16px;
-  }
-  #mo-title {
-    font-size: 1.3rem;
-    letter-spacing: 4px;
-    color: #e74c3c;
-    text-align: center;
-  }
-  .mo-section-label {
-    font-size: 0.7rem;
-    letter-spacing: 2px;
-    color: #555;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-  .mo-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 10px;
-    background: #1a1a1a;
-  }
+  #mo-content { width: 520px; display: flex; flex-direction: column; gap: 16px; }
+  #mo-title { font-size: 1.3rem; letter-spacing: 4px; color: #e74c3c; text-align: center; }
+  .mo-section-label { font-size: 0.7rem; letter-spacing: 2px; color: #555; text-transform: uppercase; margin-bottom: 4px; }
+  .mo-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #1a1a2e; }
   .mo-place { width: 32px; font-size: 0.85rem; color: #888; }
   .mo-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
   .mo-name { flex: 1; font-size: 0.9rem; }
   .mo-pts { font-size: 0.85rem; color: #f39c12; min-width: 48px; text-align: right; }
-  #mo-next {
-    text-align: center;
-    font-size: 0.8rem;
-    color: #555;
-    letter-spacing: 2px;
-    margin-top: 4px;
-  }
+  #mo-next { text-align: center; font-size: 0.8rem; color: #555; letter-spacing: 2px; margin-top: 4px; }
   .mo-cols { display: flex; gap: 24px; }
   .mo-cols > div { flex: 1; }
 
-  /* ── Results (session end) ── */
-  #results {
-    min-height: 100vh;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 20px;
-  }
+  /* Results */
+  #results { min-height: 100vh; flex-direction: column; align-items: center; justify-content: center; gap: 20px; }
   #results-title { font-size: 1.8rem; letter-spacing: 4px; color: #f0f0f0; }
   .result-list { display: flex; flex-direction: column; gap: 8px; width: 360px; }
-  .result-row {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px 14px; background: #1a1a1a;
-    border-left: 3px solid transparent;
-  }
+  .result-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #1a1a2e; border-left: 3px solid transparent; }
   .result-row .place { font-size: 1.1rem; width: 28px; text-align: center; }
   .result-row .rname { flex: 1; }
   .result-row .r-pts { font-size: 0.9rem; color: #f39c12; }
   .result-row.winner { border-color: #f39c12; }
-  .result-row.winner .place { color: #f39c12; }
   #winner-banner { text-align: center; }
   #winner-banner .big { font-size: 1.4rem; color: #f39c12; }
-  #winner-banner .prize { font-size: 0.9rem; color: #888; margin-top: 4px; }
-  #rematch-status { font-size: 0.85rem; color: #888; min-height: 20px; text-align: center; }
-  #rematch-countdown { font-size: 2rem; color: #e74c3c; min-height: 48px; text-align: center; }
 
-  /* ── Spectator banner ── */
-  #spectator-banner {
-    position: fixed; top: 0; left: 0; right: 0;
-    background: #e74c3c; color: #fff;
-    text-align: center; padding: 6px;
-    font-size: 0.8rem; letter-spacing: 2px;
-    z-index: 100; display: none;
-  }
+  /* Spectator */
+  #spectator-banner { position: fixed; top: 0; left: 0; right: 0; background: #e74c3c; color: #fff; text-align: center; padding: 6px; font-size: 0.8rem; letter-spacing: 2px; z-index: 100; display: none; }
   #spectator-banner.active { display: block; }
 
-  @media (max-width: 840px) {
+  @media (max-width: 720px) {
     #hud, #canvas { width: 100vw !important; }
     #canvas { height: auto !important; }
     #mo-content { width: 95vw; }
@@ -267,14 +114,14 @@
 </head>
 <body>
 
-<div id="spectator-banner">SPECTATOR MODE — watching live</div>
+<div id="spectator-banner">SPECTATOR MODE</div>
 
 <div id="screens">
 
   <!-- Home -->
   <div id="home" class="active">
     <h1>KURVE BR</h1>
-    <p>Multiplayer curve fever — last one alive wins the pot</p>
+    <p>Multiplayer curve fever — last one alive wins</p>
     <div class="row">
       <label>YOUR NAME</label>
       <input id="home-name" type="text" placeholder="enter name" maxlength="16" autocomplete="off">
@@ -284,18 +131,16 @@
       <button class="btn" id="btn-create-private">CREATE PRIVATE</button>
     </div>
     <div class="row">
-      <input id="join-code" type="text" placeholder="KURVE-XXXX" maxlength="10" style="width:180px" autocomplete="off">
+      <input id="join-code" type="text" placeholder="room code" maxlength="10" style="width:180px" autocomplete="off">
       <button class="btn" id="btn-join">JOIN</button>
       <button class="btn" id="btn-spectate">WATCH</button>
     </div>
     <div id="home-error" style="color:#e74c3c;font-size:0.85rem;min-height:20px;"></div>
-
     <hr class="divider">
-
     <div id="rooms-section">
       <div id="rooms-header">
         <span>OPEN ROOMS</span>
-        <button id="rooms-refresh">↻ refresh</button>
+        <button id="rooms-refresh">&#8635; refresh</button>
       </div>
       <div id="rooms-list">
         <div id="rooms-empty">No open rooms right now</div>
@@ -311,7 +156,7 @@
     <div id="lobby-status"></div>
     <div id="lobby-error"></div>
     <button class="btn primary" id="btn-start" style="display:none">START GAME</button>
-    <button class="btn" id="btn-leave-lobby">LEAVE LOBBY</button>
+    <button class="btn" id="btn-leave-lobby">LEAVE</button>
   </div>
 
   <!-- Game -->
@@ -320,9 +165,7 @@
       <div id="hud-players"></div>
       <div id="zone-timer"></div>
     </div>
-    <canvas id="canvas" width="800" height="600"></canvas>
-
-    <!-- Between-match overlay -->
+    <canvas id="canvas" width="680" height="430"></canvas>
     <div id="match-overlay">
       <div id="mo-content">
         <div id="mo-title"></div>
@@ -346,8 +189,6 @@
     <div id="results-title">SESSION COMPLETE</div>
     <div id="winner-banner"></div>
     <div class="result-list" id="result-list"></div>
-    <div id="rematch-status"></div>
-    <div id="rematch-countdown"></div>
     <div class="row">
       <button class="btn primary" id="btn-rematch">NEW SESSION</button>
       <button class="btn" id="btn-home">MAIN MENU</button>

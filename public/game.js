@@ -1,520 +1,368 @@
-/* Kurve BR — client */
-(function () {
-  'use strict';
+'use strict';
 
-  const $ = id => document.getElementById(id);
-  const screens = {
-    home: $('home'),
-    lobby: $('lobby'),
-    game: $('game'),
-    results: $('results'),
-  };
+const COLORS = ['#FF4444', '#4BA8FF', '#4CFF6C', '#FFD700', '#FF8C00', '#DA70D6'];
+const LINE_W = 3;
+const CW = 680, CH = 430;
 
-  function show(name) {
-    Object.values(screens).forEach(s => s.classList.remove('active'));
-    screens[name].classList.add('active');
-    if (name === 'home') {
-      loadRooms();
-      if (!roomsInterval) roomsInterval = setInterval(loadRooms, 5000);
-    } else {
-      clearInterval(roomsInterval);
-      roomsInterval = null;
-    }
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+let socket = null;
+let myId = null;
+let myCode = null;
+let isHost = false;
+let isSpectator = false;
+let playerStates = {};
+let allPlayers = {};
+let lastZone = null;
+let moTimer = null;
+
+// ── Screens ──────────────────────────────────────────────────────────────
+function showScreen(name) {
+  document.querySelectorAll('#screens > div').forEach(el => {
+    el.classList.toggle('active', el.id === name);
+  });
+}
+
+function setErr(id, msg) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = msg || '';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function ordinal(n) {
+  const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// ── Socket ───────────────────────────────────────────────────────────────
+function ensureSocket() {
+  if (socket && socket.connected) return;
+  if (socket) { socket.connect(); return; }
+  socket = io();
+  socket.on('connect', () => console.log('connected', socket.id));
+  socket.on('err', onErr);
+  socket.on('rooms:update', renderRoomList);
+  socket.on('joined', onJoined);
+  socket.on('lobby:update', onLobbyUpdate);
+  socket.on('newhost', onNewHost);
+  socket.on('match:start', onMatchStart);
+  socket.on('tick', onTick);
+  socket.on('match:end', onMatchEnd);
+  socket.on('session:end', onSessionEnd);
+}
+
+function onErr(msg) {
+  setErr('home-error', msg);
+  setErr('lobby-error', msg);
+}
+
+// ── Room browser ─────────────────────────────────────────────────────────
+function renderRoomList(rooms) {
+  const list = document.getElementById('rooms-list');
+  if (!rooms || rooms.length === 0) {
+    list.innerHTML = '<div id="rooms-empty">No open rooms right now</div>';
+    return;
   }
+  list.innerHTML = rooms.map(r => {
+    const full = r.count >= r.max;
+    return `<div class="room-card${full ? ' full' : ''}">
+      <span class="rc-host">${esc(r.host)}</span>
+      <span class="rc-count${full ? ' full' : ''}">${r.count}/${r.max}</span>
+      <button class="btn sm"${full ? ' disabled' : ''} onclick="quickJoin('${esc(r.code)}')">JOIN</button>
+    </div>`;
+  }).join('');
+}
 
-  // ── State ─────────────────────────────────────────────────────────────────
-  let roomsInterval = null;
-  let socket;
-  let myId = null;
-  let myCode = null;
-  let isHost = false;
-  let isSpectator = false;
-  let myName = '';
-  let keys = { left: false, right: false };
-  let lastInput = { left: false, right: false };
-  let inputInterval = null;
-  let matchNumber = 0;
-  let totalMatches = 10;
-  let canvasClearTimer = null;
+window.quickJoin = function(code) {
+  const name = document.getElementById('home-name').value.trim();
+  if (!name) { setErr('home-error', 'Enter your name first'); return; }
+  setErr('home-error', '');
+  doJoin(code, name, false);
+};
 
-  const canvas = $('canvas');
-  const ctx = canvas.getContext('2d');
-  let canvasW = 800, canvasH = 600;
+function fetchRooms() {
+  fetch('/api/rooms').then(r => r.json()).then(renderRoomList).catch(() => {});
+}
 
-  let gamePlayers = {};
-  let currentZone = null;
-  let lastZone = { left: -1, top: -1, right: -1, bottom: -1 };
+// ── Lobby ────────────────────────────────────────────────────────────────
+function onJoined({ code, playerId, isHost: host, spectator, colorIdx, players }) {
+  myId = playerId; myCode = code; isHost = host; isSpectator = spectator;
+  document.getElementById('room-code-display').textContent = code;
+  document.getElementById('btn-start').style.display = host ? 'block' : 'none';
+  document.getElementById('spectator-banner').classList.toggle('active', spectator);
+  renderLobbyPlayers(players);
+  setErr('lobby-error', '');
+  showScreen('lobby');
+}
 
-  // ── Socket ────────────────────────────────────────────────────────────────
-  function connect() {
-    if (socket) {
-      // Reuse existing socket — just reconnect it, handlers are already registered
-      if (!socket.connected) socket.connect();
-      return;
-    }
-    socket = io({ transports: ['websocket', 'polling'] });
+function onLobbyUpdate({ players }) {
+  renderLobbyPlayers(players);
+  const me = players.find(p => p.id === myId);
+  if (me) { isHost = me.isHost; document.getElementById('btn-start').style.display = me.isHost ? 'block' : 'none'; }
+}
 
-    socket.on('connect', () => { console.log('[socket] connected', socket.id); });
-    socket.on('disconnect', (reason) => {
-      console.log('[socket] disconnected', reason);
-      // Only show error for unexpected disconnects, not manual ones
-      if (reason !== 'io client disconnect') setError('home', 'Disconnected from server.');
-    });
-
-    socket.on('game:error', ({ msg }) => {
-      console.warn('[game:error]', msg);
-      setError('home', msg);
-      setError('lobby', msg);
-    });
-
-    socket.on('room:joined', (data) => {
-      myId = data.playerId;
-      myCode = data.code;
-      isHost = data.isHost;
-      isSpectator = data.spectator || false;
-      $('room-code-display').textContent = data.code;
-      $('room-code-display').onclick = () => copyCode(data.code);
-      $('btn-start').style.display = isHost ? 'block' : 'none';
-      $('spectator-banner').classList.toggle('active', isSpectator);
-      updateLobbyList(data.players);
-      show('lobby');
-    });
-
-    socket.on('lobby:update', ({ players }) => {
-      updateLobbyList(players);
-      updateStartButton(players);
-    });
-
-    socket.on('lobby:newhost', ({ playerId }) => {
-      if (playerId === myId) {
-        isHost = true;
-        $('btn-start').style.display = 'block';
-      }
-    });
-
-    socket.on('game:start', (data) => {
-      // Cancel any pending canvas-clear from a previous match
-      if (canvasClearTimer) { clearTimeout(canvasClearTimer); canvasClearTimer = null; }
-
-      canvasW = data.canvasW;
-      canvasH = data.canvasH;
-      canvas.width = canvasW;
-      canvas.height = canvasH;
-      matchNumber = data.matchNumber;
-      totalMatches = data.totalMatches;
-      gamePlayers = data.players;
-      lastZone = { left: -1, top: -1, right: -1, bottom: -1 };
-
-      clearCanvas();
-      updateHUD(gamePlayers);
-      hideMatchOverlay();
-      show('game');
-      startInputLoop();
-    });
-
-    socket.on('game:spectate', (data) => {
-      if (!data) return;
-      canvasW = data.canvasW;
-      canvasH = data.canvasH;
-      canvas.width = canvasW;
-      canvas.height = canvasH;
-      gamePlayers = data.players;
-      currentZone = data.zone;
-      lastZone = { left: -1, top: -1, right: -1, bottom: -1 };
-      clearCanvas();
-      if (data.pixelMap) {
-        for (const [key, ownerId] of Object.entries(data.pixelMap)) {
-          const p = data.players[ownerId];
-          if (!p) continue;
-          const [x, y] = key.split(',').map(Number);
-          ctx.fillStyle = p.color;
-          ctx.fillRect(x - 1, y - 1, 3, 3);
-        }
-      }
-      drawZoneBorder(currentZone);
-      updateHUD(gamePlayers);
-      show('game');
-    });
-
-    socket.on('state', (data) => {
-      gamePlayers = data.players;
-      currentZone = data.zone;
-
-      if (data.newPixels) {
-        for (const px of data.newPixels) {
-          ctx.fillStyle = px.color;
-          ctx.fillRect(px.x - Math.floor(px.w / 2), px.y - Math.floor(px.w / 2), px.w, px.w);
-        }
-      }
-
-      drawZoneBorder(currentZone);
-      updateHUD(gamePlayers);
-    });
-
-    socket.on('match:end', (data) => {
-      stopInputLoop();
-      matchNumber = data.matchNumber;
-      showMatchOverlay(data);
-      // Clear canvas after 3 s; next game:start will also clear but may arrive at 5 s
-      canvasClearTimer = setTimeout(() => {
-        clearCanvas();
-        lastZone = { left: -1, top: -1, right: -1, bottom: -1 };
-        canvasClearTimer = null;
-      }, 3000);
-    });
-
-    socket.on('session:end', (data) => {
-      if (canvasClearTimer) { clearTimeout(canvasClearTimer); canvasClearTimer = null; }
-      hideMatchOverlay();
-      showSessionResults(data);
-    });
-
-    socket.on('rematch:votes', ({ votes, needed }) => {
-      $('rematch-status').textContent = `Rematch votes: ${votes} / ${needed}`;
-    });
-
-    socket.on('rematch:countdown', ({ seconds }) => {
-      $('rematch-countdown').textContent = seconds > 0 ? seconds : '';
-      if (seconds === 0) {
-        clearCanvas();
-        show('game');
-        startInputLoop();
-      }
-    });
+function onNewHost({ playerId }) {
+  if (playerId === myId) {
+    isHost = true;
+    document.getElementById('btn-start').style.display = 'block';
   }
+}
 
-  // ── Canvas ────────────────────────────────────────────────────────────────
-  function clearCanvas() {
-    ctx.fillStyle = '#0d0d0d';
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  }
+function renderLobbyPlayers(players) {
+  const list = document.getElementById('lobby-player-list');
+  list.innerHTML = players.map(p => {
+    const color = p.colorIdx >= 0 ? COLORS[p.colorIdx] : '#555';
+    const tags = [
+      p.isHost ? '<span class="tag">HOST</span>' : '',
+      p.id === myId ? '<span class="tag">YOU</span>' : '',
+      p.spectator ? '<span class="tag">SPECTATOR</span>' : ''
+    ].join('');
+    return `<div class="player-row" style="border-left-color:${color}">
+      <div class="dot" style="background:${color}"></div>
+      <span class="pname">${esc(p.name)}</span>
+      ${tags}
+    </div>`;
+  }).join('');
+  const count = players.filter(p => !p.spectator).length;
+  document.getElementById('lobby-status').textContent = `${count} player${count !== 1 ? 's' : ''} in lobby`;
+}
 
-  function drawZoneBorder(zone) {
-    if (!zone) return;
-    if (zone.left === lastZone.left && zone.top === lastZone.top &&
-        zone.right === lastZone.right && zone.bottom === lastZone.bottom) return;
+// ── Canvas ───────────────────────────────────────────────────────────────
+function clearCanvas() {
+  ctx.fillStyle = '#0d0d1a';
+  ctx.fillRect(0, 0, CW, CH);
+}
 
+function drawZone(zone) {
+  if (!zone) return;
+  const changed = !lastZone ||
+    lastZone.left !== zone.left || lastZone.top !== zone.top ||
+    lastZone.right !== zone.right || lastZone.bottom !== zone.bottom;
+
+  if (changed) {
     lastZone = { ...zone };
-    const { left, top, right, bottom } = zone;
-    const w = right - left;
-    const h = bottom - top;
-
-    // Darken the four border strips that fell outside the new zone
-    ctx.fillStyle = 'rgba(0,0,0,0.88)';
-    ctx.fillRect(0, 0, canvasW, top);                   // top strip
-    ctx.fillRect(0, bottom, canvasW, canvasH - bottom); // bottom strip
-    ctx.fillRect(0, top, left, h);                      // left strip
-    ctx.fillRect(right, top, canvasW - right, h);       // right strip
-
-    // Red border rectangle
-    ctx.strokeStyle = '#e74c3c';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(left, top, w, h);
+    ctx.fillStyle = 'rgba(200, 20, 20, 0.18)';
+    if (zone.top > 0)      ctx.fillRect(0, 0, CW, zone.top);
+    if (zone.bottom < CH)  ctx.fillRect(0, zone.bottom, CW, CH - zone.bottom);
+    if (zone.left > 0)     ctx.fillRect(0, zone.top, zone.left, zone.bottom - zone.top);
+    if (zone.right < CW)   ctx.fillRect(zone.right, zone.top, CW - zone.right, zone.bottom - zone.top);
   }
 
-  function updateHUD(players) {
-    const hudDiv = $('hud-players');
-    hudDiv.innerHTML = '';
-    const sorted = Object.values(players).sort((a, b) => a.name.localeCompare(b.name));
-    for (const p of sorted) {
-      if (p.spectator) continue;
-      const div = document.createElement('div');
-      div.className = 'hud-p' + (p.alive ? '' : ' dead');
-      div.innerHTML = `<div class="dot" style="background:${p.color}"></div><span>${esc(p.name)}</span>`;
-      hudDiv.appendChild(div);
-    }
-    $('zone-timer').textContent = `Match ${matchNumber} / ${totalMatches}`;
+  ctx.strokeStyle = '#e74c3c';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(zone.left + 0.5, zone.top + 0.5, zone.right - zone.left - 1, zone.bottom - zone.top - 1);
+}
+
+// ── Game events ──────────────────────────────────────────────────────────
+function onMatchStart({ matchNumber, totalMatches, players, scores }) {
+  if (moTimer) { clearInterval(moTimer); moTimer = null; }
+  document.getElementById('match-overlay').classList.remove('active');
+  lastZone = null;
+  playerStates = {};
+  allPlayers = {};
+  for (const p of players) {
+    playerStates[p.id] = { ...p };
+    allPlayers[p.id] = { name: p.name, colorIdx: p.colorIdx };
   }
+  clearCanvas();
+  renderHUD(players, scores);
+  document.getElementById('zone-timer').textContent = `Match ${matchNumber}/${totalMatches}`;
+  showScreen('game');
+}
 
-  // ── Match overlay (between matches) ───────────────────────────────────────
-  function showMatchOverlay(data) {
-    const medals = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
-    const isLast = data.matchNumber >= data.totalMatches;
-
-    $('mo-title').textContent = `MATCH ${data.matchNumber} RESULTS`;
-
-    const placDiv = $('mo-placements');
-    placDiv.innerHTML = '';
-    for (const p of data.placements) {
-      const row = document.createElement('div');
-      row.className = 'mo-row';
-      row.innerHTML = `
-        <span class="mo-place">${medals[p.placement - 1] || p.placement}</span>
-        <span class="mo-dot" style="background:${p.color}"></span>
-        <span class="mo-name">${esc(p.name)}</span>
-        <span class="mo-pts">+${p.pointsEarned}pts</span>
-      `;
-      placDiv.appendChild(row);
-    }
-
-    const standDiv = $('mo-standings');
-    standDiv.innerHTML = '';
-    for (const [i, s] of data.standings.entries()) {
-      const row = document.createElement('div');
-      row.className = 'mo-row';
-      row.innerHTML = `
-        <span class="mo-place">${i + 1}</span>
-        <span class="mo-dot" style="background:${s.color}"></span>
-        <span class="mo-name">${esc(s.name)}</span>
-        <span class="mo-pts">${s.points}pts</span>
-      `;
-      standDiv.appendChild(row);
-    }
-
-    $('mo-next').textContent = isLast ? 'Session ending...' : 'Next match in 5s';
-    $('match-overlay').classList.add('active');
+function onTick({ players, zone, pixels }) {
+  for (const px of pixels) {
+    ctx.fillStyle = COLORS[px.colorIdx] || '#fff';
+    ctx.fillRect(px.x - 1, px.y - 1, LINE_W, LINE_W);
   }
-
-  function hideMatchOverlay() {
-    $('match-overlay').classList.remove('active');
+  drawZone(zone);
+  for (const p of players) {
+    if (playerStates[p.id]) Object.assign(playerStates[p.id], p);
   }
+  updateHUDDead();
+}
 
-  // ── Session results ───────────────────────────────────────────────────────
-  function showSessionResults(data) {
-    $('results-title').textContent = 'SESSION COMPLETE';
-    const list = $('result-list');
-    list.innerHTML = '';
-    for (const [i, s] of data.standings.entries()) {
-      const row = document.createElement('div');
-      row.className = 'result-row' + (i === 0 ? ' winner' : '');
-      row.style.borderLeftColor = s.color;
-      row.innerHTML = `
-        <span class="place">${i + 1}</span>
-        <span class="mo-dot" style="background:${s.color}"></span>
-        <span class="rname">${esc(s.name)}${s.id === myId ? ' (you)' : ''}</span>
-        <span class="r-pts">${s.points}pts</span>
-      `;
-      list.appendChild(row);
-    }
+function renderHUD(players, scores) {
+  document.getElementById('hud-players').innerHTML = players.map(p => {
+    const color = COLORS[p.colorIdx] || '#fff';
+    const pts = scores ? (scores[p.id] || 0) : 0;
+    return `<div class="hud-p" id="hudp-${p.id}">
+      <div class="dot" style="background:${color}"></div>
+      <span>${esc(p.name)}&nbsp;<small style="color:#555">${pts}</small></span>
+    </div>`;
+  }).join('');
+}
 
-    if (data.winner) {
-      const prizeUSD = (data.prize / 100).toFixed(2);
-      const status = data.payoutStatus === 'sent' ? '✓ paid'
-                   : data.payoutStatus === 'failed' ? '(payout failed)' : '(payout pending)';
-      $('winner-banner').innerHTML = `
-        <div class="big" style="color:${data.winner.color}">${esc(data.winner.name)} wins the session!</div>
-        <div class="prize">$${prizeUSD} prize ${status}</div>
-      `;
+function updateHUDDead() {
+  for (const [id, p] of Object.entries(playerStates)) {
+    const el = document.getElementById('hudp-' + id);
+    if (el) el.classList.toggle('dead', !p.alive);
+  }
+}
+
+function onMatchEnd({ matchNumber, totalMatches, matchResult, scores }) {
+  document.getElementById('mo-title').textContent = `MATCH ${matchNumber} / ${totalMatches}`;
+
+  document.getElementById('mo-placements').innerHTML = matchResult.map((p, i) => {
+    const color = COLORS[p.colorIdx] || '#fff';
+    return `<div class="mo-row">
+      <span class="mo-place">${ordinal(i + 1)}</span>
+      <div class="mo-dot" style="background:${color}"></div>
+      <span class="mo-name">${esc(p.name)}</span>
+      <span class="mo-pts">+${p.pts}</span>
+    </div>`;
+  }).join('');
+
+  const standings = Object.entries(scores)
+    .map(([id, pts]) => {
+      const info = allPlayers[id] || matchResult.find(r => r.id === id) || { name: '?', colorIdx: 0 };
+      return { id, name: info.name, colorIdx: info.colorIdx, pts };
+    })
+    .sort((a, b) => b.pts - a.pts);
+
+  document.getElementById('mo-standings').innerHTML = standings.map((p, i) => {
+    const color = COLORS[p.colorIdx] || '#fff';
+    return `<div class="mo-row">
+      <span class="mo-place">${i + 1}</span>
+      <div class="mo-dot" style="background:${color}"></div>
+      <span class="mo-name">${esc(p.name)}</span>
+      <span class="mo-pts">${p.pts}</span>
+    </div>`;
+  }).join('');
+
+  let secs = 5;
+  document.getElementById('mo-next').textContent = `Next match in ${secs}s`;
+  if (moTimer) clearInterval(moTimer);
+  moTimer = setInterval(() => {
+    secs--;
+    if (secs <= 0) {
+      clearInterval(moTimer); moTimer = null;
+      document.getElementById('mo-next').textContent = 'Starting…';
     } else {
-      $('winner-banner').innerHTML = '<div class="big">No winner</div>';
+      document.getElementById('mo-next').textContent = `Next match in ${secs}s`;
     }
+  }, 1000);
 
-    $('rematch-status').textContent = '';
-    $('rematch-countdown').textContent = '';
-    $('btn-rematch').disabled = false;
-    $('btn-rematch').textContent = 'NEW SESSION';
-    $('btn-rematch').style.display = isSpectator ? 'none' : 'inline-block';
-    show('results');
-  }
+  document.getElementById('match-overlay').classList.add('active');
+}
 
-  // ── Lobby helpers ─────────────────────────────────────────────────────────
-  function updateLobbyList(players) {
-    const list = $('lobby-player-list');
-    list.innerHTML = '';
-    for (const [id, p] of Object.entries(players)) {
-      const row = document.createElement('div');
-      row.className = 'player-row';
-      row.style.borderLeftColor = p.color || '#555';
-      const tags = [];
-      if (p.isHost) tags.push('HOST');
-      if (p.spectator) tags.push('SPECTATOR');
-      row.innerHTML = `
-        <div class="dot" style="background:${p.color || '#555'}"></div>
-        <span class="pname">${esc(p.name)}${id === myId ? ' (you)' : ''}</span>
-        ${tags.length ? `<span class="tag">${tags.join(' ')}</span>` : ''}
-      `;
-      list.appendChild(row);
-    }
-    updateStartButton(players);
-    const nonSpec = Object.values(players).filter(p => !p.spectator);
-    $('lobby-status').textContent = `${nonSpec.length} / 6 players — need at least 2 to start`;
-  }
+function onSessionEnd({ final }) {
+  if (moTimer) { clearInterval(moTimer); moTimer = null; }
+  document.getElementById('match-overlay').classList.remove('active');
+  document.getElementById('spectator-banner').classList.remove('active');
 
-  function updateStartButton(players) {
-    if (!isHost) return;
-    const nonSpec = Object.values(players).filter(p => !p.spectator);
-    $('btn-start').disabled = nonSpec.length < 2;
-  }
+  const winner = final[0];
+  document.getElementById('winner-banner').innerHTML = winner
+    ? `<div class="big">${esc(winner.name)} wins the session!</div>` : '';
 
-  // ── Input ─────────────────────────────────────────────────────────────────
-  function startInputLoop() {
-    if (isSpectator) return;
-    stopInputLoop();
-    inputInterval = setInterval(() => {
-      if (keys.left !== lastInput.left || keys.right !== lastInput.right) {
-        socket.emit('input', { left: keys.left, right: keys.right });
-        lastInput = { ...keys };
-      }
-    }, 16);
-  }
+  const medals = ['🥇', '🥈', '🥉'];
+  document.getElementById('result-list').innerHTML = final.map((p, i) => {
+    const color = COLORS[p.colorIdx] || '#fff';
+    const place = medals[i] || `${i + 1}.`;
+    return `<div class="result-row${i === 0 ? ' winner' : ''}">
+      <span class="place">${place}</span>
+      <div style="width:10px;height:10px;border-radius:50%;background:${color};flex-shrink:0"></div>
+      <span class="rname">${esc(p.name)}</span>
+      <span class="r-pts">${p.pts} pts</span>
+    </div>`;
+  }).join('');
 
-  function stopInputLoop() {
-    if (inputInterval) { clearInterval(inputInterval); inputInterval = null; }
-  }
+  showScreen('results');
+}
 
-  document.addEventListener('keydown', e => {
-    if (e.key === 'ArrowLeft')  { keys.left = true;  e.preventDefault(); }
-    if (e.key === 'ArrowRight') { keys.right = true; e.preventDefault(); }
+// ── Input ────────────────────────────────────────────────────────────────
+const keys = {};
+document.addEventListener('keydown', e => {
+  if (!keys[e.key]) { keys[e.key] = true; sendInput(); }
+  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.key] = false; sendInput(); });
+
+function sendInput() {
+  if (!socket || !socket.connected || isSpectator) return;
+  socket.emit('input', {
+    left:  !!(keys['ArrowLeft']  || keys['a'] || keys['A']),
+    right: !!(keys['ArrowRight'] || keys['d'] || keys['D'])
   });
-  document.addEventListener('keyup', e => {
-    if (e.key === 'ArrowLeft')  keys.left = false;
-    if (e.key === 'ArrowRight') keys.right = false;
-  });
+}
 
-  // ── Room browser ──────────────────────────────────────────────────────────
-  async function loadRooms() {
-    try {
-      const res = await fetch('/api/rooms');
-      const rooms = await res.json();
-      console.log('[loadRooms]', rooms.length, 'public rooms:', rooms.map(r => r.code));
-      renderRooms(rooms);
-    } catch (err) {
-      console.error('[loadRooms] fetch failed:', err);
-    }
+// ── Buttons ───────────────────────────────────────────────────────────────
+function doJoin(code, name, spectator) {
+  ensureSocket();
+  socket.emit('join', { code, name, spectator });
+}
+
+document.getElementById('btn-create-public').addEventListener('click', () => {
+  const name = document.getElementById('home-name').value.trim();
+  if (!name) { setErr('home-error', 'Enter your name'); return; }
+  setErr('home-error', '');
+  ensureSocket();
+  socket.emit('create', { name, isPublic: true });
+});
+
+document.getElementById('btn-create-private').addEventListener('click', () => {
+  const name = document.getElementById('home-name').value.trim();
+  if (!name) { setErr('home-error', 'Enter your name'); return; }
+  setErr('home-error', '');
+  ensureSocket();
+  socket.emit('create', { name, isPublic: false });
+});
+
+document.getElementById('btn-join').addEventListener('click', () => {
+  const name = document.getElementById('home-name').value.trim();
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!name) { setErr('home-error', 'Enter your name'); return; }
+  if (!code) { setErr('home-error', 'Enter a room code'); return; }
+  setErr('home-error', '');
+  doJoin(code, name, false);
+});
+
+document.getElementById('btn-spectate').addEventListener('click', () => {
+  const code = document.getElementById('join-code').value.trim().toUpperCase();
+  if (!code) { setErr('home-error', 'Enter a room code'); return; }
+  setErr('home-error', '');
+  doJoin(code, '', true);
+});
+
+document.getElementById('btn-start').addEventListener('click', () => {
+  if (socket) { setErr('lobby-error', ''); socket.emit('start'); }
+});
+
+document.getElementById('btn-leave-lobby').addEventListener('click', () => {
+  if (socket) { socket.emit('leave'); socket.disconnect(); socket = null; }
+  myId = myCode = null; isHost = isSpectator = false;
+  document.getElementById('spectator-banner').classList.remove('active');
+  setErr('lobby-error', '');
+  showScreen('home');
+});
+
+document.getElementById('room-code-display').addEventListener('click', () => {
+  const code = document.getElementById('room-code-display').textContent;
+  if (code) navigator.clipboard.writeText(code).catch(() => {});
+});
+
+document.getElementById('rooms-refresh').addEventListener('click', fetchRooms);
+
+document.getElementById('btn-home').addEventListener('click', () => {
+  if (socket) { socket.emit('leave'); socket.disconnect(); socket = null; }
+  myId = myCode = null; isHost = isSpectator = false;
+  document.getElementById('spectator-banner').classList.remove('active');
+  showScreen('home');
+});
+
+document.getElementById('btn-rematch').addEventListener('click', () => {
+  if (socket && socket.connected && myCode) {
+    showScreen('lobby');
+  } else {
+    showScreen('home');
   }
+});
 
-  function renderRooms(rooms) {
-    const list = $('rooms-list');
-    if (!rooms.length) {
-      list.innerHTML = '<div id="rooms-empty">No open rooms right now</div>';
-      return;
-    }
-    list.innerHTML = '';
-    for (const r of rooms) {
-      const full = r.players >= r.maxPlayers;
-      const card = document.createElement('div');
-      card.className = 'room-card' + (full ? ' full' : '');
-      card.innerHTML = `
-        <span class="rc-host">${esc(r.hostName)}'s room</span>
-        <span class="rc-count${full ? ' full' : ''}">${r.players}/${r.maxPlayers}</span>
-        <button class="btn sm" ${full ? 'disabled' : ''} data-code="${esc(r.code)}">JOIN</button>
-      `;
-      if (!full) {
-        card.querySelector('button').addEventListener('click', () => {
-          const name = $('home-name').value.trim();
-          if (!name) return setError('home', 'Enter your name first');
-          myName = name;
-          connect();
-          console.log('[rooms browser] joining', r.code);
-          socket.emit('room:join', { code: r.code, name, spectator: false });
-        });
-      }
-      list.appendChild(card);
-    }
-  }
-
-  // ── Button handlers ───────────────────────────────────────────────────────
-  $('btn-create-public').addEventListener('click', () => {
-    const name = $('home-name').value.trim();
-    if (!name) return setError('home', 'Enter your name');
-    myName = name;
-    connect();
-    socket.emit('room:create', { name, isPublic: true });
-  });
-
-  $('btn-create-private').addEventListener('click', () => {
-    const name = $('home-name').value.trim();
-    if (!name) return setError('home', 'Enter your name');
-    myName = name;
-    connect();
-    socket.emit('room:create', { name, isPublic: false });
-  });
-
-  $('btn-join').addEventListener('click', () => {
-    const name = $('home-name').value.trim();
-    const code = normaliseCode($('join-code').value);
-    if (!name) return setError('home', 'Enter your name');
-    if (!code) return setError('home', 'Enter a room code');
-    myName = name;
-    connect();
-    console.log('[join] emitting room:join', code);
-    socket.emit('room:join', { code, name, spectator: false });
-  });
-
-  $('btn-spectate').addEventListener('click', () => {
-    const name = $('home-name').value.trim() || 'Spectator';
-    const code = normaliseCode($('join-code').value);
-    if (!code) return setError('home', 'Enter a room code to watch');
-    myName = name;
-    connect();
-    socket.emit('room:join', { code, name, spectator: true });
-  });
-
-  $('btn-start').addEventListener('click', () => {
-    if (socket) socket.emit('lobby:start');
-  });
-
-  $('btn-leave-lobby').addEventListener('click', () => {
-    if (socket) { socket.disconnect(); socket = null; }
-    show('home');
-  });
-
-  $('btn-rematch').addEventListener('click', () => {
-    if (socket) socket.emit('rematch:vote');
-    $('btn-rematch').disabled = true;
-    $('btn-rematch').textContent = 'VOTED';
-  });
-
-  $('btn-home').addEventListener('click', () => {
-    if (socket) socket.disconnect();
-    socket = null;
-    myId = null; myCode = null; isHost = false; isSpectator = false;
-    matchNumber = 0; totalMatches = 10;
-    $('btn-rematch').disabled = false;
-    $('btn-rematch').textContent = 'NEW SESSION';
-    $('spectator-banner').classList.remove('active');
-    hideMatchOverlay();
-    show('home'); // show() restarts the rooms poll
-  });
-
-  $('room-code-display').addEventListener('click', () => {
-    if (myCode) copyCode(myCode);
-  });
-
-  $('rooms-refresh').addEventListener('click', loadRooms);
-
-  // ── Misc ──────────────────────────────────────────────────────────────────
-  function normaliseCode(raw) {
-    let c = raw.trim().toUpperCase();
-    if (c && !c.startsWith('KURVE-')) c = 'KURVE-' + c;
-    return c;
-  }
-
-  function copyCode(code) {
-    navigator.clipboard.writeText(code).catch(() => {});
-    const el = $('room-code-display');
-    const orig = el.textContent;
-    el.textContent = 'COPIED!';
-    setTimeout(() => { el.textContent = orig; }, 1200);
-  }
-
-  function setError(screen, msg) {
-    const el = $(screen + '-error');
-    if (el) { el.textContent = msg; setTimeout(() => { el.textContent = ''; }, 4000); }
-  }
-
-  function esc(str) {
-    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
-  // Start rooms poll immediately — home screen is the initial active screen
-  loadRooms();
-  roomsInterval = setInterval(loadRooms, 5000);
-
-  // Handle Stripe redirect query params
-  const params = new URLSearchParams(location.search);
-  if (params.get('room') && params.get('player') && params.get('paid')) {
-    const pName = params.get('player');
-    const rCode = params.get('room');
-    $('home-name').value = pName;
-    $('join-code').value = rCode;
-    history.replaceState({}, '', '/');
-    connect();
-    socket.emit('room:join', { code: rCode, name: pName, spectator: false });
-  }
-  if (params.get('cancelled')) {
-    history.replaceState({}, '', '/');
-    setError('home', 'Payment cancelled.');
-  }
-
-})();
+// ── Init ──────────────────────────────────────────────────────────────────
+clearCanvas();
+ensureSocket();
+fetchRooms();
