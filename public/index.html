@@ -22,7 +22,7 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 .phase-seg.done { opacity: 1; }
 .phase-seg.current { opacity: 1; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-#overlay, #result-screen, #match-result, #mode-screen, #mp-setup, #mp-lobby { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.92); z-index: 10; border-radius: 8px; }
+#overlay, #result-screen, #match-result, #mode-screen, #mp-setup, #mp-lobby, #mp-match-result, #mp-final { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.92); z-index: 10; border-radius: 8px; }
 #overlay h2, #mode-screen h2, #mp-setup h2, #mp-lobby h2 { color: #fff; font-size: 22px; font-weight: 500; margin-bottom: 6px; }
 #overlay p, #mode-screen p, #mp-setup p { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 16px; text-align:center; line-height:1.8; }
 .kh { color: rgba(255,255,255,0.75); font-size: 13px; margin-bottom: 18px; text-align: center; line-height: 2; }
@@ -40,7 +40,19 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 #solo-btn:hover { background: #2ecc71; }
 #mp-btn:hover { background: #3a8fd4; }
 #mp-back-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
-#result-screen, #match-result, #overlay, #mp-setup, #mp-lobby { display: none; }
+#result-screen, #match-result, #overlay, #mp-setup, #mp-lobby, #mp-match-result, #mp-final { display: none; }
+#mp-mr-title { font-size: 13px; color: rgba(255,255,255,0.4); letter-spacing: 2px; margin-bottom: 10px; }
+#mp-mr-winner { font-size: 26px; font-weight: 500; margin-bottom: 14px; }
+#mp-mr-scores { display: flex; flex-direction: column; gap: 3px; width: 220px; margin-bottom: 14px; }
+.mp-score-row { display: flex; justify-content: space-between; padding: 6px 10px; background: rgba(255,255,255,0.05); border-radius: 3px; font-size: 13px; }
+#mp-mr-next { font-size: 12px; color: rgba(255,255,255,0.3); letter-spacing: 1px; }
+#mp-final-winner { font-size: 24px; font-weight: 500; margin-bottom: 16px; }
+#mp-final-list { display: flex; flex-direction: column; gap: 4px; width: 240px; margin-bottom: 20px; }
+.mp-final-row { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.05); border-radius: 4px; font-size: 13px; }
+.mp-final-row.winner { background: rgba(255,215,0,0.1); }
+.mp-final-row span:last-child { margin-left: auto; color: rgba(255,255,255,0.5); }
+#mp-final-back { border: none; padding: 10px 28px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; background: #4BA8FF; color: #111; font-family: inherit; }
+#mp-final-back:hover { background: #3a8fd4; }
 .mode-btns { display: flex; flex-direction: column; gap: 4px; align-items: center; }
 #mp-create-btn { background: #4BA8FF; color: #111; width: 100%; }
 #mp-create-btn:hover, #mp-join-btn:hover { background: #3a8fd4; }
@@ -126,6 +138,19 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     <div id="mp-lobby-err" class="mp-err"></div>
     <button id="mp-start-btn" style="display:none">Start Game</button>
     <button id="mp-lobby-leave">Leave</button>
+  </div>
+
+  <div id="mp-match-result">
+    <div id="mp-mr-title"></div>
+    <div id="mp-mr-winner"></div>
+    <div id="mp-mr-scores"></div>
+    <div id="mp-mr-next"></div>
+  </div>
+
+  <div id="mp-final">
+    <div id="mp-final-winner"></div>
+    <div id="mp-final-list"></div>
+    <button id="mp-final-back">Play Again</button>
   </div>
 
   <div id="overlay">
@@ -589,115 +614,391 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     document.getElementById('overlay').style.display='flex';
   });
 
-  window._startSoloSession = function() {
-    currentMatch=1; balance=0; wins=0; losses=0;
-    document.getElementById('result-screen').style.display='none';
-    startMatch();
-  };
-
   drawField();
 })();
 </script>
 <script src="/socket.io/socket.io.js"></script>
 <script>
 (function () {
-  let sock = null, myId = null, roomCode = null, isHost = false;
+  // ── Shared constants (mirror solo values) ────────────────────────────────
+  const COLORS = ['#FF4444','#4BA8FF','#4CFF6C','#FFD700','#FF8C00','#DA70D6'];
+  const W = 680, H = 420, STEP = 1.9, LINE_W = 3;
+  const HOLE_INT = 90, HOLE_RND = 90, HOLE_LEN = 12, SELF_IMM = 18;
+  const TOTAL = 10, WIN_PTS = 5;
+  function getD(m) { return m <= 3 ? 0.032 : m <= 6 ? 0.035 : 0.042; }
+
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
 
   function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+  function $id(id) { return document.getElementById(id); }
 
+  // ── Lobby state ──────────────────────────────────────────────────────────
+  let sock = null, myId = null, roomCode = null, isHost = false;
+  let sessionPlayers = [];
+
+  // ── Pixel map (host only) ────────────────────────────────────────────────
+  let pixelMap = {};
+  function pk(x, y) { return ((Math.round(x) & 0x7FFF) << 15) | (Math.round(y) & 0x7FFF); }
+  function setPixel(x, y, pid, f) { pixelMap[pk(x, y)] = { pid, f }; }
+  function getPixel(x, y) { return pixelMap[pk(x, y)]; }
+  function oob(x, y, z) { return x<=z+2||y<=z+2||x>=W-z-2||y>=H-z-2; }
+  function solid(x, y, pid, frame, z) {
+    if (oob(x, y, z)) return true;
+    const p = getPixel(x, y); if (!p) return false;
+    if (p.pid === pid && (frame - p.f) < SELF_IMM) return false;
+    return true;
+  }
+  function collidesAt(x, y, c, z) {
+    for (let dx=-2;dx<=2;dx++) for (let dy=-2;dy<=2;dy++) if (solid(x+dx,y+dy,c.pid,c.ownFrame,z)) return true;
+    return false;
+  }
+
+  // ── Canvas helpers ───────────────────────────────────────────────────────
+  function clearCanvas() { ctx.fillStyle='#0d0d1a'; ctx.fillRect(0,0,W,H); }
+  function drawZoneBorder(z) {
+    ctx.strokeStyle='rgba(255,80,80,0.7)'; ctx.lineWidth=2;
+    ctx.strokeRect(z+0.5, z+0.5, W-z*2-1, H-z*2-1);
+  }
+
+  // ── HUD ──────────────────────────────────────────────────────────────────
+  let currentMatch = 1, scores = {};
+
+  function initHUD() {
+    $id('hud-dots').innerHTML = sessionPlayers.map(p =>
+      `<div class="hdot" style="background:${p.color}" data-pid="${p.id}"></div>`
+    ).join('');
+    $id('balance-display').style.display = 'none';
+    $id('phase-display').textContent = '';
+    updateHUD();
+  }
+
+  function updateHUD(alivePids) {
+    $id('match-display').textContent = `Match ${currentMatch} / ${TOTAL}`;
+    if (alivePids !== undefined) {
+      $id('hud-alive').textContent = alivePids.length + ' alive';
+      sessionPlayers.forEach(p => {
+        const el = $id('hud-dots').querySelector(`[data-pid="${p.id}"]`);
+        if (el) el.style.opacity = alivePids.includes(p.id) ? '1' : '0.15';
+      });
+    } else {
+      $id('hud-alive').textContent = sessionPlayers.length + ' alive';
+    }
+    buildMpPhaseBar();
+  }
+
+  function buildMpPhaseBar() {
+    const bar = $id('phase-bar'); bar.innerHTML = '';
+    const segColors = ['#4CFF6C','#4CFF6C','#4CFF6C','#FFD700','#FFD700','#FFD700','#FF8C00','#FF8C00','#FF8C00','#FF8C00'];
+    for (let i = 1; i <= TOTAL; i++) {
+      const seg = document.createElement('div');
+      seg.className = 'phase-seg' + (i < currentMatch ? ' done' : i === currentMatch ? ' current' : '');
+      seg.style.background = segColors[i-1];
+      bar.appendChild(seg);
+    }
+  }
+
+  // ── Match result overlay ─────────────────────────────────────────────────
+  let countdownTimer = null;
+
+  function showMatchResult(data) {
+    currentMatch = data.matchNumber;
+    scores = data.scores;
+    const winner = sessionPlayers.find(p => p.id === data.winnerId);
+    $id('mp-mr-title').textContent = `MATCH ${data.matchNumber} / ${TOTAL}`;
+    $id('mp-mr-winner').innerHTML = winner
+      ? `<span style="color:${winner.color}">${esc(winner.name)}</span> wins`
+      : 'No survivor';
+    $id('mp-mr-scores').innerHTML = sessionPlayers
+      .map(p => ({ p, pts: data.scores[p.id] || 0 }))
+      .sort((a, b) => b.pts - a.pts)
+      .map(({ p, pts }) => `<div class="mp-score-row"><span style="color:${p.color}">${esc(p.name)}</span><span>${pts} pts</span></div>`)
+      .join('');
+    if (data.matchNumber >= TOTAL) {
+      $id('mp-mr-next').textContent = 'Session complete…';
+    } else {
+      let secs = 5;
+      $id('mp-mr-next').textContent = `Next match in ${secs}s`;
+      if (countdownTimer) clearInterval(countdownTimer);
+      countdownTimer = setInterval(() => {
+        secs--;
+        if (secs <= 0) { clearInterval(countdownTimer); countdownTimer = null; $id('mp-mr-next').textContent = 'Starting…'; }
+        else $id('mp-mr-next').textContent = `Next match in ${secs}s`;
+      }, 1000);
+    }
+    $id('mp-match-result').style.display = 'flex';
+  }
+
+  function hideMatchResult() { $id('mp-match-result').style.display = 'none'; }
+
+  function showFinal(final) {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+    hideMatchResult();
+    const winner = final[0];
+    $id('mp-final-winner').textContent = winner ? `${winner.name} wins the session!` : 'Session complete';
+    $id('mp-final-winner').style.color = winner ? winner.color : '#fff';
+    const medals = ['🥇','🥈','🥉'];
+    $id('mp-final-list').innerHTML = final.map((p, i) =>
+      `<div class="mp-final-row${i===0?' winner':''}">
+        <span>${medals[i]||`${i+1}.`}</span>
+        <span style="color:${p.color}">${esc(p.name)}</span>
+        <span>${p.pts} pts</span>
+      </div>`
+    ).join('');
+    $id('mp-final').style.display = 'flex';
+  }
+
+  // ── Host: game state ─────────────────────────────────────────────────────
+  let curves = [], active = false, animId = null;
+  let zoneSize = 0, zoneTimer = 30, zoneIv = null;
+  let inputs = {};  // {pid: {left, right}}
+  let mpD = 0.032;
+
+  function spawn(players) {
+    const margin = W * 0.25, result = [];
+    for (const p of players) {
+      let x, y, tries = 0;
+      do {
+        x = margin + Math.random()*(W - margin*2);
+        y = margin + Math.random()*(H - margin*2);
+        tries++;
+      } while (tries < 100 && result.some(c => Math.hypot(c.x-x, c.y-y) < 110));
+      const angle = Math.atan2(H/2-y, W/2-x) + (Math.random()-0.5)*Math.PI*0.5;
+      result.push({ pid:p.id, color:p.color, x, y, angle, alive:true,
+        holeCD: HOLE_INT+Math.floor(Math.random()*HOLE_RND), holeLen:0, invisible:false,
+        ownFrame:0, prevX:x, prevY:y });
+    }
+    return result;
+  }
+
+  function stopGame() {
+    active = false;
+    if (animId) { cancelAnimationFrame(animId); animId = null; }
+    if (zoneIv) { clearInterval(zoneIv); zoneIv = null; }
+  }
+
+  function killCurve(c) {
+    if (!c.alive) return;
+    c.alive = false;
+    const alivePids = curves.filter(x => x.alive).map(x => x.pid);
+    updateHUD(alivePids);
+    if (alivePids.length <= 1 && active) endMatch(alivePids[0] || null);
+  }
+
+  function hostStartZone() {
+    zoneSize = 0; zoneTimer = 30;
+    zoneIv = setInterval(() => {
+      zoneTimer--;
+      if (zoneTimer <= 0) {
+        zoneSize += 5; zoneTimer = 12;
+        curves.forEach(c => { if (c.alive && oob(c.x, c.y, zoneSize)) killCurve(c); });
+      }
+    }, 1000);
+  }
+
+  function hostLoop() {
+    if (!active) return;
+    curves.forEach(c => {
+      if (!c.alive) return;
+      c.ownFrame++;
+      const inp = inputs[c.pid] || { left:false, right:false };
+      if (inp.left) c.angle -= mpD;
+      if (inp.right) c.angle += mpD;
+      const px = c.x, py = c.y;
+      c.x += STEP*Math.cos(c.angle); c.y += STEP*Math.sin(c.angle);
+      if (c.holeLen > 0) { c.invisible=true; c.holeLen--; }
+      else {
+        c.invisible=false; c.holeCD--;
+        if (c.holeCD <= 0) { c.holeCD=HOLE_INT+Math.floor(Math.random()*HOLE_RND); c.holeLen=HOLE_LEN; }
+      }
+      if (!c.invisible) {
+        ctx.beginPath(); ctx.strokeStyle=c.color; ctx.lineWidth=LINE_W; ctx.lineCap='round';
+        ctx.moveTo(px,py); ctx.lineTo(c.x,c.y); ctx.stroke();
+        const steps=Math.ceil(STEP*2);
+        for (let s=0;s<=steps;s++) {
+          const t=s/steps; setPixel(px+(c.x-px)*t, py+(c.y-py)*t, c.pid, c.ownFrame);
+        }
+      }
+      c.prevX=px; c.prevY=py;
+      if (!c.invisible && collidesAt(c.x, c.y, c, zoneSize)) killCurve(c);
+    });
+    drawZoneBorder(zoneSize);
+    sock.emit('mp:relay', { event:'mp:state', data:{
+      curves: curves.map(c => ({ pid:c.pid, x:c.x, y:c.y, px:c.prevX, py:c.prevY, color:c.color, alive:c.alive, invisible:c.invisible })),
+      zoneSize
+    }});
+    const alive = curves.filter(c => c.alive);
+    if (alive.length <= 1 && active) { endMatch(alive[0]?.pid || null); return; }
+    animId = requestAnimationFrame(hostLoop);
+  }
+
+  function endMatch(winnerId) {
+    stopGame();
+    if (winnerId) scores[winnerId] = (scores[winnerId]||0) + WIN_PTS;
+    const data = { matchNumber:currentMatch, winnerId, scores:{...scores} };
+    sock.emit('mp:relay', { event:'mp:match_end', data });
+    showMatchResult(data);
+    if (currentMatch >= TOTAL) {
+      const final = sessionPlayers.map(p => ({...p, pts:scores[p.id]||0})).sort((a,b)=>b.pts-a.pts);
+      setTimeout(() => { sock.emit('mp:relay',{event:'mp:session_end',data:{final}}); showFinal(final); }, 5500);
+    } else {
+      setTimeout(() => { currentMatch++; hostStartMatch(); }, 5000);
+    }
+  }
+
+  function hostStartMatch() {
+    mpD = getD(currentMatch);
+    pixelMap = {}; zoneSize = 0;
+    curves = spawn(sessionPlayers);
+    clearCanvas(); drawZoneBorder(0); hideMatchResult();
+    initHUD(); updateHUD(curves.map(c=>c.pid));
+    const matchData = { matchNumber:currentMatch, curves:curves.map(c=>({pid:c.pid,color:c.color,x:c.x,y:c.y,angle:c.angle})) };
+    sock.emit('mp:relay', { event:'mp:match_start', data:matchData });
+    let count=3; const cd=$id('cd-msg');
+    cd.style.opacity='1'; cd.textContent=count;
+    const t=setInterval(()=>{
+      count--;
+      sock.emit('mp:relay',{event:'mp:countdown',data:{count}});
+      if (count>0) cd.textContent=count;
+      else { clearInterval(t); cd.style.opacity='0'; active=true; hostStartZone(); animId=requestAnimationFrame(hostLoop); }
+    },1000);
+  }
+
+  function hostStartSession(players) {
+    sessionPlayers = players;
+    currentMatch = 1; scores = {};
+    players.forEach(p => { scores[p.id]=0; inputs[p.id]={left:false,right:false}; });
+    // Own keyboard input
+    const kd = e => {
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+      if (e.code==='ArrowLeft')  inputs[myId] = {...(inputs[myId]||{}), left:true};
+      if (e.code==='ArrowRight') inputs[myId] = {...(inputs[myId]||{}), right:true};
+    };
+    const ku = e => {
+      if (e.code==='ArrowLeft')  inputs[myId] = {...(inputs[myId]||{}), left:false};
+      if (e.code==='ArrowRight') inputs[myId] = {...(inputs[myId]||{}), right:false};
+    };
+    document.addEventListener('keydown', kd);
+    document.addEventListener('keyup', ku);
+    // Other players' inputs arrive via socket
+    sock.on('mp:input', ({ fromId, left, right }) => { inputs[fromId]={left,right}; });
+    hostStartMatch();
+  }
+
+  // ── Non-host: receive and render ─────────────────────────────────────────
+  function nonHostInit(players) {
+    sessionPlayers = players;
+    currentMatch = 1; scores = {};
+    players.forEach(p => scores[p.id]=0);
+    // Key input → server → host
+    const nhKeys = {};
+    const sendInput = () => sock.emit('mp:input', { left:!!nhKeys['ArrowLeft'], right:!!nhKeys['ArrowRight'] });
+    document.addEventListener('keydown', e => {
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+      if (!nhKeys[e.code]) { nhKeys[e.code]=true; sendInput(); }
+    });
+    document.addEventListener('keyup', e => { nhKeys[e.code]=false; sendInput(); });
+
+    sock.on('mp:countdown', ({ count }) => {
+      const cd=$id('cd-msg');
+      if (count>0) { cd.style.opacity='1'; cd.textContent=count; }
+      else cd.style.opacity='0';
+    });
+    sock.on('mp:match_start', ({ matchNumber, curves:initCurves }) => {
+      currentMatch = matchNumber;
+      clearCanvas(); drawZoneBorder(0); hideMatchResult();
+      initHUD(); updateHUD(initCurves.map(c=>c.pid));
+    });
+    sock.on('mp:state', ({ curves:sc, zoneSize:z }) => {
+      sc.forEach(c => {
+        if (!c.invisible && c.alive) {
+          ctx.beginPath(); ctx.strokeStyle=c.color; ctx.lineWidth=LINE_W; ctx.lineCap='round';
+          ctx.moveTo(c.px,c.py); ctx.lineTo(c.x,c.y); ctx.stroke();
+        }
+      });
+      drawZoneBorder(z);
+      updateHUD(sc.filter(c=>c.alive).map(c=>c.pid));
+    });
+    sock.on('mp:match_end', data => { scores=data.scores; showMatchResult(data); });
+    sock.on('mp:session_end', ({ final }) => showFinal(final));
+  }
+
+  // ── Lobby ─────────────────────────────────────────────────────────────────
   function connect() {
     if (sock) return;
     sock = io();
     sock.on('mp:created', ({ code, playerId, players }) => {
-      myId = playerId; roomCode = code; isHost = true;
-      showLobby(code, players);
+      myId=playerId; roomCode=code; isHost=true; showLobby(code, players);
     });
     sock.on('mp:joined', ({ code, playerId, players }) => {
-      myId = playerId; roomCode = code; isHost = false;
-      showLobby(code, players);
+      myId=playerId; roomCode=code; isHost=false; showLobby(code, players);
     });
     sock.on('mp:update', ({ players, hostId }) => {
       isHost = myId === hostId;
-      renderPlayers(players);
-      document.getElementById('mp-start-btn').style.display = isHost ? '' : 'none';
+      renderLobbyPlayers(players);
+      $id('mp-start-btn').style.display = isHost ? '' : 'none';
     });
-    sock.on('mp:start', () => {
-      document.getElementById('mp-lobby').style.display = 'none';
-      window._startSoloSession();
+    sock.on('mp:start', ({ players }) => {
+      $id('mp-lobby').style.display = 'none';
+      if (isHost) hostStartSession(players);
+      else nonHostInit(players);
     });
-    sock.on('mp:err', msg => {
-      document.getElementById('mp-setup-err').textContent = msg;
-      document.getElementById('mp-lobby-err').textContent = msg;
-    });
+    sock.on('mp:err', msg => { $id('mp-setup-err').textContent=msg; $id('mp-lobby-err').textContent=msg; });
   }
 
   function showLobby(code, players) {
-    document.getElementById('mp-setup').style.display = 'none';
-    document.getElementById('mp-lobby').style.display = 'flex';
-    document.getElementById('mp-code-display').textContent = code;
-    document.getElementById('mp-start-btn').style.display = isHost ? '' : 'none';
-    renderPlayers(players);
+    $id('mp-setup').style.display='none';
+    $id('mp-lobby').style.display='flex';
+    $id('mp-code-display').textContent=code;
+    $id('mp-start-btn').style.display=isHost?'':'none';
+    renderLobbyPlayers(players);
   }
 
-  function renderPlayers(players) {
-    document.getElementById('mp-lobby-list').innerHTML = players.map(p => {
-      const tags = [
-        p.isHost ? '<span class="mp-tag">HOST</span>' : '',
-        p.id === myId ? '<span class="mp-tag">YOU</span>' : ''
-      ].join('');
-      return `<div class="mp-player-row">${esc(p.name)} ${tags}</div>`;
+  function renderLobbyPlayers(players) {
+    $id('mp-lobby-list').innerHTML = players.map(p => {
+      const dot = `<div class="hdot" style="background:${p.color||'#555'};flex-shrink:0"></div>`;
+      const tags = (p.isHost?'<span class="mp-tag">HOST</span>':'')+(p.id===myId?'<span class="mp-tag">YOU</span>':'');
+      return `<div class="mp-player-row">${dot}${esc(p.name)} ${tags}</div>`;
     }).join('');
-    document.getElementById('mp-lobby-count').textContent = `${players.length} / 6 players`;
+    $id('mp-lobby-count').textContent = `${players.length} / 6 players`;
   }
 
   function leave() {
-    if (sock) { sock.disconnect(); sock = null; }
-    myId = roomCode = null; isHost = false;
-    document.getElementById('mp-lobby').style.display = 'none';
-    document.getElementById('mp-lobby-err').textContent = '';
-    document.getElementById('mp-setup').style.display = 'flex';
+    if (sock) { sock.disconnect(); sock=null; }
+    myId=roomCode=null; isHost=false;
+    $id('mp-lobby').style.display='none'; $id('mp-lobby-err').textContent='';
+    $id('mp-setup').style.display='flex';
   }
 
-  document.getElementById('mp-btn').addEventListener('click', () => {
-    document.getElementById('mode-screen').style.display = 'none';
-    document.getElementById('mp-setup').style.display = 'flex';
+  // ── Button handlers ───────────────────────────────────────────────────────
+  $id('mp-btn').addEventListener('click', () => {
+    $id('mode-screen').style.display='none'; $id('mp-setup').style.display='flex';
   });
-
-  document.getElementById('mp-back-btn').addEventListener('click', () => {
-    document.getElementById('mp-setup').style.display = 'none';
-    document.getElementById('mode-screen').style.display = 'flex';
+  $id('mp-back-btn').addEventListener('click', () => {
+    $id('mp-setup').style.display='none'; $id('mode-screen').style.display='flex';
   });
-
-  document.getElementById('mp-create-btn').addEventListener('click', () => {
-    const name = document.getElementById('mp-name').value.trim();
-    if (!name) { document.getElementById('mp-setup-err').textContent = 'Enter your name'; return; }
-    document.getElementById('mp-setup-err').textContent = '';
-    connect();
-    sock.emit('mp:create', { name });
+  $id('mp-create-btn').addEventListener('click', () => {
+    const name=$id('mp-name').value.trim();
+    if (!name) { $id('mp-setup-err').textContent='Enter your name'; return; }
+    $id('mp-setup-err').textContent=''; connect(); sock.emit('mp:create',{name});
   });
-
-  document.getElementById('mp-join-btn').addEventListener('click', () => {
-    const name = document.getElementById('mp-name').value.trim();
-    const code = document.getElementById('mp-code-in').value.trim().toUpperCase();
-    if (!name) { document.getElementById('mp-setup-err').textContent = 'Enter your name'; return; }
-    if (!code) { document.getElementById('mp-setup-err').textContent = 'Enter a room code'; return; }
-    document.getElementById('mp-setup-err').textContent = '';
-    connect();
-    sock.emit('mp:join', { name, code });
+  $id('mp-join-btn').addEventListener('click', () => {
+    const name=$id('mp-name').value.trim();
+    const code=$id('mp-code-in').value.trim().toUpperCase();
+    if (!name) { $id('mp-setup-err').textContent='Enter your name'; return; }
+    if (!code) { $id('mp-setup-err').textContent='Enter a room code'; return; }
+    $id('mp-setup-err').textContent=''; connect(); sock.emit('mp:join',{name,code});
   });
-
-  document.getElementById('mp-code-in').addEventListener('keydown', e => {
-    if (e.key === 'Enter') document.getElementById('mp-join-btn').click();
-  });
-
-  document.getElementById('mp-start-btn').addEventListener('click', () => {
-    if (sock) { document.getElementById('mp-lobby-err').textContent = ''; sock.emit('mp:start'); }
-  });
-
-  document.getElementById('mp-lobby-leave').addEventListener('click', leave);
-
-  document.getElementById('mp-code-display').addEventListener('click', () => {
-    if (roomCode) navigator.clipboard.writeText(roomCode).catch(() => {});
+  $id('mp-code-in').addEventListener('keydown', e => { if (e.key==='Enter') $id('mp-join-btn').click(); });
+  $id('mp-start-btn').addEventListener('click', () => { if(sock){$id('mp-lobby-err').textContent='';sock.emit('mp:start');} });
+  $id('mp-lobby-leave').addEventListener('click', leave);
+  $id('mp-code-display').addEventListener('click', () => { if(roomCode)navigator.clipboard.writeText(roomCode).catch(()=>{}); });
+  $id('mp-final-back').addEventListener('click', () => {
+    $id('mp-final').style.display='none';
+    if (sock) { sock.disconnect(); sock=null; }
+    myId=roomCode=null; isHost=false;
+    $id('mp-setup').style.display='flex';
+    $id('balance-display').style.display='';
   });
 })();
 </script>

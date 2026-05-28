@@ -9,7 +9,8 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 const MAX_PLAYERS = 6;
-const rooms = {}; // code -> { hostId, players: [{id, name}] }
+const COLORS = ['#FF4444', '#4BA8FF', '#4CFF6C', '#FFD700', '#FF8C00', '#DA70D6'];
+const rooms = {};
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -19,7 +20,10 @@ function genCode() {
 }
 
 function playerList(room) {
-  return room.players.map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId }));
+  return room.players.map(p => ({
+    id: p.id, name: p.name, colorIdx: p.colorIdx, color: COLORS[p.colorIdx],
+    isHost: p.id === room.hostId
+  }));
 }
 
 function cleanup(socketId) {
@@ -41,7 +45,7 @@ io.on('connection', socket => {
     if (!name) return;
     let code, tries = 0;
     do { code = genCode(); } while (rooms[code] && ++tries < 100);
-    rooms[code] = { hostId: socket.id, players: [{ id: socket.id, name }] };
+    rooms[code] = { hostId: socket.id, players: [{ id: socket.id, name, colorIdx: 0 }] };
     socket.join(code);
     socket.emit('mp:created', { code, playerId: socket.id, players: playerList(rooms[code]) });
   });
@@ -53,7 +57,8 @@ io.on('connection', socket => {
     const room = rooms[code];
     if (!room) return socket.emit('mp:err', 'Room not found');
     if (room.players.length >= MAX_PLAYERS) return socket.emit('mp:err', 'Room full');
-    room.players.push({ id: socket.id, name });
+    const colorIdx = room.players.length;
+    room.players.push({ id: socket.id, name, colorIdx });
     socket.join(code);
     socket.emit('mp:joined', { code, playerId: socket.id, isHost: false, players: playerList(room) });
     io.to(code).emit('mp:update', { players: playerList(room), hostId: room.hostId });
@@ -65,6 +70,20 @@ io.on('connection', socket => {
     const [code, room] = entry;
     if (room.players.length < 2) return socket.emit('mp:err', 'Need at least 2 players');
     io.to(code).emit('mp:start', { players: playerList(room) });
+  });
+
+  // Non-host → host: relay left/right inputs
+  socket.on('mp:input', ({ left, right } = {}) => {
+    const room = Object.values(rooms).find(r => r.players.some(p => p.id === socket.id));
+    if (!room) return;
+    io.to(room.hostId).emit('mp:input', { fromId: socket.id, left: !!left, right: !!right });
+  });
+
+  // Host → all others: relay game events (state, match lifecycle)
+  socket.on('mp:relay', ({ event, data } = {}) => {
+    const room = Object.values(rooms).find(r => r.hostId === socket.id);
+    if (!room) return;
+    socket.to(room.code).emit(event, data);
   });
 
   socket.on('disconnect', () => cleanup(socket.id));
