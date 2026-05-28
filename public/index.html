@@ -22,12 +22,12 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 .phase-seg.done { opacity: 1; }
 .phase-seg.current { opacity: 1; animation: pulse 1s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
-#overlay, #result-screen, #match-result, #mode-screen, #mp-placeholder { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.92); z-index: 10; border-radius: 8px; }
-#overlay h2, #mode-screen h2, #mp-placeholder h2 { color: #fff; font-size: 22px; font-weight: 500; margin-bottom: 6px; }
-#overlay p, #mode-screen p, #mp-placeholder p { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 16px; text-align:center; line-height:1.8; }
+#overlay, #result-screen, #match-result, #mode-screen, #mp-setup, #mp-lobby { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.92); z-index: 10; border-radius: 8px; }
+#overlay h2, #mode-screen h2, #mp-setup h2, #mp-lobby h2 { color: #fff; font-size: 22px; font-weight: 500; margin-bottom: 6px; }
+#overlay p, #mode-screen p, #mp-setup p { color: rgba(255,255,255,0.5); font-size: 13px; margin-bottom: 16px; text-align:center; line-height:1.8; }
 .kh { color: rgba(255,255,255,0.75); font-size: 13px; margin-bottom: 18px; text-align: center; line-height: 2; }
 .kh b { color: #FF4444; }
-#play-btn, #next-btn, #cashout-btn, #again-btn, #solo-btn, #mp-btn, #mp-back-btn { border: none; padding: 11px 32px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px; }
+#play-btn, #next-btn, #cashout-btn, #again-btn, #solo-btn, #mp-btn, #mp-back-btn, #mp-create-btn, #mp-join-btn, #mp-start-btn { border: none; padding: 11px 32px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; margin-top: 8px; }
 #play-btn { background: #4CFF6C; color: #111; }
 #next-btn { background: #4CFF6C; color: #111; }
 #cashout-btn { background: #FFD700; color: #111; }
@@ -40,8 +40,28 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 #solo-btn:hover { background: #2ecc71; }
 #mp-btn:hover { background: #3a8fd4; }
 #mp-back-btn:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
-#result-screen, #match-result, #overlay, #mp-placeholder { display: none; }
+#result-screen, #match-result, #overlay, #mp-setup, #mp-lobby { display: none; }
 .mode-btns { display: flex; flex-direction: column; gap: 4px; align-items: center; }
+#mp-create-btn { background: #4BA8FF; color: #111; width: 100%; }
+#mp-create-btn:hover, #mp-join-btn:hover { background: #3a8fd4; }
+#mp-join-btn { background: #4BA8FF; color: #111; }
+#mp-start-btn { background: #4CFF6C; color: #111; }
+#mp-start-btn:hover { background: #2ecc71; }
+#mp-lobby-leave { border: 1px solid rgba(255,255,255,0.15); padding: 8px 20px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; margin-top: 4px; background: transparent; color: rgba(255,255,255,0.4); font-family: inherit; }
+#mp-lobby-leave:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+.mp-form { display: flex; flex-direction: column; gap: 8px; width: 260px; margin-bottom: 12px; }
+.mp-or { text-align: center; color: rgba(255,255,255,0.25); font-size: 11px; margin: 4px 0; }
+.mp-join-row { display: flex; gap: 8px; }
+.mp-join-row .mp-input { flex: 1; min-width: 0; }
+.mp-input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 9px 14px; border-radius: 5px; font-size: 14px; font-family: inherit; width: 100%; outline: none; box-sizing: border-box; }
+.mp-input:focus { border-color: #4BA8FF; }
+.mp-err { color: #FF4444; font-size: 12px; min-height: 16px; text-align: center; }
+.mp-code-display { font-size: 28px; font-weight: 600; letter-spacing: 8px; color: #fff; cursor: pointer; margin: 4px 0 12px; }
+.mp-code-display:hover::after { content: ' 📋'; font-size: 14px; letter-spacing: 0; }
+.mp-lobby-list { display: flex; flex-direction: column; gap: 4px; width: 240px; margin: 4px 0 8px; }
+.mp-player-row { background: rgba(255,255,255,0.05); padding: 7px 12px; border-radius: 4px; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+.mp-tag { font-size: 10px; color: rgba(255,255,255,0.45); background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 3px; }
+.mp-lobby-count { font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 4px; }
 #mr-result { font-size: 48px; font-weight: 700; margin-bottom: 4px; }
 #mr-balance { font-size: 16px; color: rgba(255,255,255,0.6); margin-bottom: 4px; }
 #mr-match { font-size: 12px; color: rgba(255,255,255,0.4); margin-bottom: 20px; }
@@ -83,10 +103,29 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     </div>
   </div>
 
-  <div id="mp-placeholder">
+  <div id="mp-setup">
     <h2>Multiplayer Room</h2>
-    <p>Coming soon</p>
+    <div class="mp-form">
+      <input id="mp-name" class="mp-input" type="text" placeholder="your name" maxlength="16" autocomplete="off">
+      <button id="mp-create-btn">Create Room</button>
+      <div class="mp-or">— or join existing —</div>
+      <div class="mp-join-row">
+        <input id="mp-code-in" class="mp-input" type="text" placeholder="room code" maxlength="6" autocomplete="off">
+        <button id="mp-join-btn">Join</button>
+      </div>
+      <div id="mp-setup-err" class="mp-err"></div>
+    </div>
     <button id="mp-back-btn">← Back</button>
+  </div>
+
+  <div id="mp-lobby">
+    <h2>Lobby</h2>
+    <div id="mp-code-display" class="mp-code-display" title="Click to copy"></div>
+    <div id="mp-lobby-list" class="mp-lobby-list"></div>
+    <div id="mp-lobby-count" class="mp-lobby-count"></div>
+    <div id="mp-lobby-err" class="mp-err"></div>
+    <button id="mp-start-btn" style="display:none">Start Game</button>
+    <button id="mp-lobby-leave">Leave</button>
   </div>
 
   <div id="overlay">
@@ -549,16 +588,117 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     document.getElementById('mode-screen').style.display='none';
     document.getElementById('overlay').style.display='flex';
   });
-  document.getElementById('mp-btn').addEventListener('click',()=>{
-    document.getElementById('mode-screen').style.display='none';
-    document.getElementById('mp-placeholder').style.display='flex';
-  });
-  document.getElementById('mp-back-btn').addEventListener('click',()=>{
-    document.getElementById('mp-placeholder').style.display='none';
-    document.getElementById('mode-screen').style.display='flex';
-  });
+
+  window._startSoloSession = function() {
+    currentMatch=1; balance=0; wins=0; losses=0;
+    document.getElementById('result-screen').style.display='none';
+    startMatch();
+  };
 
   drawField();
+})();
+</script>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(function () {
+  let sock = null, myId = null, roomCode = null, isHost = false;
+
+  function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  function connect() {
+    if (sock) return;
+    sock = io();
+    sock.on('mp:created', ({ code, playerId, players }) => {
+      myId = playerId; roomCode = code; isHost = true;
+      showLobby(code, players);
+    });
+    sock.on('mp:joined', ({ code, playerId, players }) => {
+      myId = playerId; roomCode = code; isHost = false;
+      showLobby(code, players);
+    });
+    sock.on('mp:update', ({ players, hostId }) => {
+      isHost = myId === hostId;
+      renderPlayers(players);
+      document.getElementById('mp-start-btn').style.display = isHost ? '' : 'none';
+    });
+    sock.on('mp:start', () => {
+      document.getElementById('mp-lobby').style.display = 'none';
+      window._startSoloSession();
+    });
+    sock.on('mp:err', msg => {
+      document.getElementById('mp-setup-err').textContent = msg;
+      document.getElementById('mp-lobby-err').textContent = msg;
+    });
+  }
+
+  function showLobby(code, players) {
+    document.getElementById('mp-setup').style.display = 'none';
+    document.getElementById('mp-lobby').style.display = 'flex';
+    document.getElementById('mp-code-display').textContent = code;
+    document.getElementById('mp-start-btn').style.display = isHost ? '' : 'none';
+    renderPlayers(players);
+  }
+
+  function renderPlayers(players) {
+    document.getElementById('mp-lobby-list').innerHTML = players.map(p => {
+      const tags = [
+        p.isHost ? '<span class="mp-tag">HOST</span>' : '',
+        p.id === myId ? '<span class="mp-tag">YOU</span>' : ''
+      ].join('');
+      return `<div class="mp-player-row">${esc(p.name)} ${tags}</div>`;
+    }).join('');
+    document.getElementById('mp-lobby-count').textContent = `${players.length} / 6 players`;
+  }
+
+  function leave() {
+    if (sock) { sock.disconnect(); sock = null; }
+    myId = roomCode = null; isHost = false;
+    document.getElementById('mp-lobby').style.display = 'none';
+    document.getElementById('mp-lobby-err').textContent = '';
+    document.getElementById('mp-setup').style.display = 'flex';
+  }
+
+  document.getElementById('mp-btn').addEventListener('click', () => {
+    document.getElementById('mode-screen').style.display = 'none';
+    document.getElementById('mp-setup').style.display = 'flex';
+  });
+
+  document.getElementById('mp-back-btn').addEventListener('click', () => {
+    document.getElementById('mp-setup').style.display = 'none';
+    document.getElementById('mode-screen').style.display = 'flex';
+  });
+
+  document.getElementById('mp-create-btn').addEventListener('click', () => {
+    const name = document.getElementById('mp-name').value.trim();
+    if (!name) { document.getElementById('mp-setup-err').textContent = 'Enter your name'; return; }
+    document.getElementById('mp-setup-err').textContent = '';
+    connect();
+    sock.emit('mp:create', { name });
+  });
+
+  document.getElementById('mp-join-btn').addEventListener('click', () => {
+    const name = document.getElementById('mp-name').value.trim();
+    const code = document.getElementById('mp-code-in').value.trim().toUpperCase();
+    if (!name) { document.getElementById('mp-setup-err').textContent = 'Enter your name'; return; }
+    if (!code) { document.getElementById('mp-setup-err').textContent = 'Enter a room code'; return; }
+    document.getElementById('mp-setup-err').textContent = '';
+    connect();
+    sock.emit('mp:join', { name, code });
+  });
+
+  document.getElementById('mp-code-in').addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('mp-join-btn').click();
+  });
+
+  document.getElementById('mp-start-btn').addEventListener('click', () => {
+    if (sock) { document.getElementById('mp-lobby-err').textContent = ''; sock.emit('mp:start'); }
+  });
+
+  document.getElementById('mp-lobby-leave').addEventListener('click', leave);
+
+  document.getElementById('mp-code-display').addEventListener('click', () => {
+    if (roomCode) navigator.clipboard.writeText(roomCode).catch(() => {});
+  });
 })();
 </script>
 </body>
