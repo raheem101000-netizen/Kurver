@@ -8,9 +8,8 @@ const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
-const W = 680, H = 430;
+const W = 680, H = 420;
 const STEP = 1.9;
-const TURN = 0.040;
 const LINE_W = 3;
 const HOLE_INT = 90;
 const HOLE_RND = 90;
@@ -18,12 +17,27 @@ const HOLE_LEN = 12;
 const SELF_IMM = 18;
 const TICK_MS = 33;
 const MAX_PLAYERS = 6;
-const TOTAL_MATCHES = 10;
-const ZONE_DELAY_TICKS = 900;
-const ZONE_SHRINK_TICKS = 360;
+const TOTAL_MATCHES = 20;
+const ZONE_DELAY_TICKS = 909;   // ~30 s
+const ZONE_SHRINK_TICKS = 364;  // ~12 s
 const ZONE_SHRINK_AMT = 5;
 const MATCH_POINTS = [6, 4, 3, 2, 1, 0];
 const COLORS = ['#FF4444', '#4BA8FF', '#4CFF6C', '#FFD700', '#FF8C00', '#DA70D6'];
+
+const PHASES = [
+  { from: 1,  to: 3,  D: 0.032 },
+  { from: 4,  to: 6,  D: 0.035 },
+  { from: 7,  to: 12, D: 0.042 },
+  { from: 13, to: 20, D: 0.050 },
+];
+
+function getPhase(matchNumber) {
+  return PHASES.find(p => matchNumber >= p.from && matchNumber <= p.to) || PHASES[PHASES.length - 1];
+}
+
+function oob(x, y, zoneSize) {
+  return x <= zoneSize + 2 || y <= zoneSize + 2 || x >= W - zoneSize - 2 || y >= H - zoneSize - 2;
+}
 
 function genCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -104,7 +118,9 @@ function spawnPlayers(players) {
     const angle = Math.atan2(H / 2 - y, W / 2 - x) + (Math.random() - 0.5) * Math.PI;
     return {
       id: p.id, colorIdx: p.colorIdx, name: p.name,
-      x, y, angle, alive: true, deathTick: null,
+      x, y, prevX: x, prevY: y,
+      angle, alive: true, deathTick: null,
+      ownFrame: 0,
       holeCountdown: HOLE_INT + Math.floor(Math.random() * HOLE_RND),
       inHole: false, holeLen: 0
     };
@@ -126,7 +142,8 @@ function startMatch(room) {
   room.gameState = {
     matchNumber, tick: 0, pixelMap: {},
     snakes, alivePlayers: snakes.map(s => s.id),
-    zone: { left: 0, top: 0, right: W, bottom: H },
+    zoneSize: 0,
+    currentPhase: getPhase(matchNumber),
     scores, inputs: {}
   };
 
@@ -145,60 +162,86 @@ function gameTick(room) {
   const gs = room.gameState;
   const t = ++gs.tick;
 
-  if (t > ZONE_DELAY_TICKS) {
-    const st = t - ZONE_DELAY_TICKS;
-    if (st % ZONE_SHRINK_TICKS === 0) {
-      gs.zone.left += ZONE_SHRINK_AMT;
-      gs.zone.top += ZONE_SHRINK_AMT;
-      gs.zone.right -= ZONE_SHRINK_AMT;
-      gs.zone.bottom -= ZONE_SHRINK_AMT;
-    }
+  // Zone shrink: starts at ZONE_DELAY_TICKS, repeats every ZONE_SHRINK_TICKS
+  if (t >= ZONE_DELAY_TICKS && (t - ZONE_DELAY_TICKS) % ZONE_SHRINK_TICKS === 0) {
+    gs.zoneSize += ZONE_SHRINK_AMT;
   }
 
+  const D = gs.currentPhase.D;
   const newPixels = [];
 
   for (const snake of gs.snakes) {
     if (!snake.alive) continue;
 
+    snake.ownFrame++;
+
+    // Turn
     const inp = gs.inputs[snake.id] || { left: false, right: false };
-    if (inp.left) snake.angle -= TURN;
-    if (inp.right) snake.angle += TURN;
+    if (inp.left)  snake.angle -= D;
+    if (inp.right) snake.angle += D;
+
+    // Move (save previous position for client trail rendering)
+    snake.prevX = snake.x;
+    snake.prevY = snake.y;
     snake.x += Math.cos(snake.angle) * STEP;
     snake.y += Math.sin(snake.angle) * STEP;
 
-    if (snake.inHole) {
-      if (--snake.holeLen <= 0) {
-        snake.inHole = false;
-        snake.holeCountdown = HOLE_INT + Math.floor(Math.random() * HOLE_RND);
-      }
-    } else {
+    // Hole transition — runs before death checks so state is correct this frame
+    if (!snake.inHole) {
       if (--snake.holeCountdown <= 0) {
         snake.inHole = true;
         snake.holeLen = HOLE_LEN;
       }
+    } else {
+      if (--snake.holeLen <= 0) {
+        snake.inHole = false;
+        snake.holeCountdown = HOLE_INT + Math.floor(Math.random() * HOLE_RND);
+      }
     }
 
+    // Death 1: zone wall (always, even during hole)
+    let dead = oob(snake.x, snake.y, gs.zoneSize);
+
+    // Death 2: trail collision (only when not in hole)
+    if (!dead && !snake.inHole) {
+      outer:
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dy = -2; dy <= 2; dy++) {
+          const cell = gs.pixelMap[pk(snake.x + dx, snake.y + dy)];
+          if (cell && !(cell.id === snake.id && (snake.ownFrame - cell.f) < SELF_IMM)) {
+            dead = true;
+            break outer;
+          }
+        }
+      }
+    }
+
+    if (dead) {
+      snake.alive = false;
+      snake.deathTick = t;
+      gs.alivePlayers = gs.alivePlayers.filter(id => id !== snake.id);
+      continue;
+    }
+
+    // Paint 3×3 pixel block (only when not in hole)
     if (!snake.inHole) {
-      let hit = snake.x < gs.zone.left || snake.x > gs.zone.right ||
-                snake.y < gs.zone.top  || snake.y > gs.zone.bottom;
-      if (!hit) {
-        const cell = gs.pixelMap[pk(snake.x, snake.y)];
-        if (cell && !(cell.id === snake.id && (t - cell.f) < SELF_IMM)) hit = true;
+      const hw = Math.floor(LINE_W / 2); // = 1 for LINE_W=3
+      for (let dx = -hw; dx <= hw; dx++) {
+        for (let dy = -hw; dy <= hw; dy++) {
+          gs.pixelMap[pk(snake.x + dx, snake.y + dy)] = { id: snake.id, f: snake.ownFrame };
+        }
       }
-      if (hit) {
-        snake.alive = false;
-        snake.deathTick = t;
-        gs.alivePlayers = gs.alivePlayers.filter(id => id !== snake.id);
-      } else {
-        gs.pixelMap[pk(snake.x, snake.y)] = { id: snake.id, f: t };
-        newPixels.push({ x: Math.round(snake.x), y: Math.round(snake.y), colorIdx: snake.colorIdx });
-      }
+      newPixels.push({
+        x: Math.round(snake.x), y: Math.round(snake.y),
+        px: Math.round(snake.prevX), py: Math.round(snake.prevY),
+        colorIdx: snake.colorIdx
+      });
     }
   }
 
   io.to(room.code).emit('tick', {
     players: gs.snakes.map(s => ({ id: s.id, x: s.x, y: s.y, angle: s.angle, alive: s.alive, inHole: s.inHole })),
-    zone: { ...gs.zone },
+    zoneSize: gs.zoneSize,
     pixels: newPixels
   });
 

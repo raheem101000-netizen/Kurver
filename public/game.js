@@ -2,7 +2,15 @@
 
 const COLORS = ['#FF4444', '#4BA8FF', '#4CFF6C', '#FFD700', '#FF8C00', '#DA70D6'];
 const LINE_W = 3;
-const CW = 680, CH = 430;
+const CW = 680, CH = 420;
+
+// Phase config mirrors server PHASES — used only for phase bar colours
+const PHASE_CONFIG = [
+  { from: 1,  to: 3,  color: '#4CFF6C' },
+  { from: 4,  to: 6,  color: '#FFD700' },
+  { from: 7,  to: 12, color: '#FF8C00' },
+  { from: 13, to: 20, color: '#FF4444' },
+];
 
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
@@ -14,7 +22,7 @@ let isHost = false;
 let isSpectator = false;
 let playerStates = {};
 let allPlayers = {};
-let lastZone = null;
+let lastZoneSize = -1;
 let moTimer = null;
 
 // ── Screens ──────────────────────────────────────────────────────────────
@@ -137,31 +145,51 @@ function clearCanvas() {
   ctx.fillRect(0, 0, CW, CH);
 }
 
-function drawZone(zone) {
-  if (!zone) return;
-  const changed = !lastZone ||
-    lastZone.left !== zone.left || lastZone.top !== zone.top ||
-    lastZone.right !== zone.right || lastZone.bottom !== zone.bottom;
+// Matches server oob: x<=zoneSize+2 || y<=zoneSize+2 || x>=W-zoneSize-2 || y>=H-zoneSize-2
+function drawZone(zoneSize) {
+  const b = zoneSize + 2; // kill boundary coordinate
+  const changed = zoneSize !== lastZoneSize;
 
   if (changed) {
-    lastZone = { ...zone };
-    ctx.fillStyle = 'rgba(200, 20, 20, 0.18)';
-    if (zone.top > 0)      ctx.fillRect(0, 0, CW, zone.top);
-    if (zone.bottom < CH)  ctx.fillRect(0, zone.bottom, CW, CH - zone.bottom);
-    if (zone.left > 0)     ctx.fillRect(0, zone.top, zone.left, zone.bottom - zone.top);
-    if (zone.right < CW)   ctx.fillRect(zone.right, zone.top, CW - zone.right, zone.bottom - zone.top);
+    lastZoneSize = zoneSize;
+    ctx.fillStyle = 'rgba(200, 20, 20, 0.20)';
+    // top band (y 0..b inclusive)
+    ctx.fillRect(0, 0, CW, b + 1);
+    // bottom band (y CH-b..CH-1)
+    ctx.fillRect(0, CH - b, CW, b);
+    // left band (x 0..b, middle rows only to avoid corner double-fill)
+    ctx.fillRect(0, b + 1, b + 1, CH - 2 * b - 1);
+    // right band (x CW-b..CW-1)
+    ctx.fillRect(CW - b, b + 1, b, CH - 2 * b - 1);
   }
 
+  // Border at kill line — redrawn every tick to stay on top of trail lines
   ctx.strokeStyle = '#e74c3c';
   ctx.lineWidth = 1;
-  ctx.strokeRect(zone.left + 0.5, zone.top + 0.5, zone.right - zone.left - 1, zone.bottom - zone.top - 1);
+  ctx.strokeRect(b + 0.5, b + 0.5, CW - 2 * b - 1, CH - 2 * b - 1);
+}
+
+// ── Phase bar ────────────────────────────────────────────────────────────
+function renderPhaseBar(matchNumber) {
+  const bar = document.getElementById('phase-bar');
+  if (!bar) return;
+  const frags = [];
+  for (let i = 1; i <= 20; i++) {
+    const ph = PHASE_CONFIG.find(p => i >= p.from && i <= p.to);
+    const color = ph ? ph.color : '#333';
+    const isCurrent = i === matchNumber;
+    const isPast = i < matchNumber;
+    const opacity = isPast ? '0.45' : isCurrent ? '1' : '0.15';
+    frags.push(`<div class="phase-seg${isCurrent ? ' current' : ''}" style="background:${color};opacity:${opacity}"></div>`);
+  }
+  bar.innerHTML = frags.join('');
 }
 
 // ── Game events ──────────────────────────────────────────────────────────
 function onMatchStart({ matchNumber, totalMatches, players, scores }) {
   if (moTimer) { clearInterval(moTimer); moTimer = null; }
   document.getElementById('match-overlay').classList.remove('active');
-  lastZone = null;
+  lastZoneSize = -1;
   playerStates = {};
   allPlayers = {};
   for (const p of players) {
@@ -170,16 +198,25 @@ function onMatchStart({ matchNumber, totalMatches, players, scores }) {
   }
   clearCanvas();
   renderHUD(players, scores);
+  renderPhaseBar(matchNumber);
   document.getElementById('zone-timer').textContent = `Match ${matchNumber}/${totalMatches}`;
   showScreen('game');
 }
 
-function onTick({ players, zone, pixels }) {
+function onTick({ players, zoneSize, pixels }) {
+  // Smooth trail lines: server sends current (x,y) and previous (px,py) position
+  ctx.lineWidth = LINE_W;
+  ctx.lineCap = 'round';
   for (const px of pixels) {
-    ctx.fillStyle = COLORS[px.colorIdx] || '#fff';
-    ctx.fillRect(px.x - 1, px.y - 1, LINE_W, LINE_W);
+    ctx.strokeStyle = COLORS[px.colorIdx] || '#fff';
+    ctx.beginPath();
+    ctx.moveTo(px.px, px.py);
+    ctx.lineTo(px.x, px.y);
+    ctx.stroke();
   }
-  drawZone(zone);
+
+  drawZone(zoneSize);
+
   for (const p of players) {
     if (playerStates[p.id]) Object.assign(playerStates[p.id], p);
   }
@@ -278,7 +315,7 @@ function onSessionEnd({ final }) {
 const keys = {};
 document.addEventListener('keydown', e => {
   if (!keys[e.key]) { keys[e.key] = true; sendInput(); }
-  if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(e.key)) e.preventDefault();
 });
 document.addEventListener('keyup', e => { keys[e.key] = false; sendInput(); });
 

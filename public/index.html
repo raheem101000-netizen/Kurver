@@ -71,8 +71,15 @@
   .hud-p { display: flex; align-items: center; gap: 4px; }
   .hud-p .dot { width: 8px; height: 8px; border-radius: 50%; }
   .hud-p.dead { opacity: 0.3; text-decoration: line-through; }
-  #canvas { display: block; border: 1px solid #222; }
   #zone-timer { font-size: 0.75rem; color: #e74c3c; }
+
+  /* Phase bar */
+  #phase-bar { width: 680px; height: 5px; display: flex; gap: 1px; margin-bottom: 2px; }
+  .phase-seg { flex: 1; border-radius: 1px; }
+  .phase-seg.current { animation: segPulse 0.7s ease-in-out infinite alternate; }
+  @keyframes segPulse { from { opacity: 1; } to { opacity: 0.25; } }
+
+  #canvas { display: block; border: 1px solid #222; }
 
   /* Match overlay */
   #match-overlay { display: none; position: fixed; inset: 0; background: rgba(13,13,26,0.92); align-items: center; justify-content: center; z-index: 50; }
@@ -106,7 +113,7 @@
   #spectator-banner.active { display: block; }
 
   @media (max-width: 720px) {
-    #hud, #canvas { width: 100vw !important; }
+    #hud, #phase-bar, #canvas { width: 100vw !important; }
     #canvas { height: auto !important; }
     #mo-content { width: 95vw; }
   }
@@ -165,7 +172,8 @@
       <div id="hud-players"></div>
       <div id="zone-timer"></div>
     </div>
-    <canvas id="canvas" width="680" height="430"></canvas>
+    <div id="phase-bar"></div>
+    <canvas id="canvas" width="680" height="420"></canvas>
     <div id="match-overlay">
       <div id="mo-content">
         <div id="mo-title"></div>
