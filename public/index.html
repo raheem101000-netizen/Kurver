@@ -949,9 +949,6 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     scores={}; players.forEach(p=>scores[p.id]=0);
 
     let inputEnabled=false;
-    let localX=0, localY=0, localAngle=0, localColor=null, localAlive=false;
-    let localAnimId=null, correction=null;
-
     const nhKeys={};
     const send=()=>{
       if(!inputEnabled) return;
@@ -962,22 +959,6 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       if(!nhKeys[e.code]){nhKeys[e.code]=true;send();}
     });
     document.addEventListener('keyup',e=>{ nhKeys[e.code]=false; send(); });
-
-    function localLoop() {
-      if(!localAlive) return;
-      if(correction&&correction.framesLeft>0){
-        localX+=correction.dx; localY+=correction.dy;
-        if(--correction.framesLeft===0) correction=null;
-      }
-      if(nhKeys['ArrowLeft'])  localAngle-=0.040;
-      if(nhKeys['ArrowRight']) localAngle+=0.040;
-      const px=localX, py=localY;
-      localX+=Math.cos(localAngle)*1.9;
-      localY+=Math.sin(localAngle)*1.9;
-      ctx.strokeStyle=localColor; ctx.lineWidth=LINE_W; ctx.lineCap='round';
-      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(localX,localY); ctx.stroke();
-      localAnimId=requestAnimationFrame(localLoop);
-    }
 
     sock.on('mp:countdown',({count})=>{
       const cd=$id('cd-msg');
@@ -991,35 +972,18 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
       inputEnabled=true;
-      if(localAnimId){cancelAnimationFrame(localAnimId);localAnimId=null;}
-      correction=null;
-      const me=data.players.find(p=>p.pid===myId);
-      if(me){
-        localX=me.x; localY=me.y; localAngle=me.angle;
-        localColor=me.color; localAlive=true;
-        localAnimId=requestAnimationFrame(localLoop);
-      }
     });
     sock.on('state',({curves:sc,pixels,zone:z})=>{
       ctx.lineWidth=LINE_W; ctx.lineCap='round';
       for(const p of pixels){
-        if(localColor&&p.color===localColor) continue;
         ctx.strokeStyle=p.color;
         ctx.beginPath(); ctx.moveTo(p.px,p.py); ctx.lineTo(p.x,p.y); ctx.stroke();
-      }
-      const me=sc.find(c=>c.id===myId);
-      if(me){
-        if(!me.alive) localAlive=false;
-        else if(localAlive){
-          const dist=Math.hypot(me.x-localX, me.y-localY);
-          if(dist>=8) correction={dx:(me.x-localX)/3, dy:(me.y-localY)/3, framesLeft:3};
-        }
       }
       drawZone(z);
       renderHUD(sc.filter(c=>c.alive).map(c=>c.id));
     });
-    sock.on('mp:between',data=>{ inputEnabled=false; localAlive=false; scores=data.scores; showBetween(data); });
-    sock.on('mp:final',data=>{ inputEnabled=false; localAlive=false; showFinal(data); });
+    sock.on('mp:between',data=>{ inputEnabled=false; scores=data.scores; showBetween(data); });
+    sock.on('mp:final',data=>{ inputEnabled=false; showFinal(data); });
   }
 
   // ── Socket relay ──────────────────────────────────────────────────────────
