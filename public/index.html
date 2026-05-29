@@ -949,9 +949,17 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     scores={}; players.forEach(p=>scores[p.id]=0);
 
     let localCurve=null, localAnimId=null;
+    let localFrame=0;
+    const inputLog=[];          // {frame, t, left, right} — one entry per send()
+    let correction=null;        // {dx, dy, framesLeft} — spread over 3 rAF frames
 
     const nhKeys={};
-    const send=()=>sock.emit('mp:input',{left:!!nhKeys['ArrowLeft'],right:!!nhKeys['ArrowRight']});
+    const send=()=>{
+      const left=!!nhKeys['ArrowLeft'], right=!!nhKeys['ArrowRight'];
+      inputLog.push({frame:localFrame, t:Date.now(), left, right});
+      if (inputLog.length>120) inputLog.splice(0, inputLog.length-120);
+      sock.emit('mp:input',{left, right});
+    };
     document.addEventListener('keydown',e=>{
       if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code))e.preventDefault();
       if(!nhKeys[e.code]){nhKeys[e.code]=true;send();}
@@ -960,6 +968,11 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 
     function localLoop() {
       if (!localCurve||!localCurve.alive) return;
+      localFrame++;
+      if (correction&&correction.framesLeft>0) {
+        localCurve.x+=correction.dx; localCurve.y+=correction.dy;
+        if (--correction.framesLeft===0) correction=null;
+      }
       if (nhKeys['ArrowLeft'])  localCurve.angle -= TURN;
       if (nhKeys['ArrowRight']) localCurve.angle += TURN;
       const px=localCurve.x, py=localCurve.y;
@@ -982,6 +995,7 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
       if (localAnimId){cancelAnimationFrame(localAnimId);localAnimId=null;}
+      localFrame=0; inputLog.length=0; correction=null;
       const me=data.players.find(p=>p.pid===myId);
       if (me){
         localCurve={x:me.x,y:me.y,angle:me.angle,color:me.color,alive:true};
@@ -992,6 +1006,10 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       const myColor=localCurve&&localCurve.color;
       drawPixels(myColor ? pixels.filter(p=>p.color!==myColor) : pixels);
       const me=sc.find(c=>c.id===myId);
+      if (me&&localCurve&&localCurve.alive) {
+        const dist=Math.hypot(me.x-localCurve.x, me.y-localCurve.y);
+        if (dist>=5) correction={dx:(me.x-localCurve.x)/3, dy:(me.y-localCurve.y)/3, framesLeft:3};
+      }
       if (me&&!me.alive&&localCurve) localCurve.alive=false;
       drawZone(z);
       renderHUD(sc.filter(c=>c.alive).map(c=>c.id));
