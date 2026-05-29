@@ -536,7 +536,12 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     },1000);
   }
 
-  function loop(){
+  const FRAME_MS = 1000 / 60;
+  let lastFrameTime = 0;
+
+  function loop(timestamp){
+    if(timestamp - lastFrameTime < FRAME_MS){ animId=requestAnimationFrame(loop); return; }
+    lastFrameTime = timestamp;
     if(!active)return;
     globalFrame++;
     const step=currentPhase.D;
@@ -814,7 +819,12 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     if (ap.length<=1 && active) hostEndMatch(ap[0]||null);
   }
 
-  function hostLoop() {
+  const HOST_FRAME_MS = 1000 / 60;
+  let hostLastFrameTime = 0;
+
+  function hostLoop(timestamp) {
+    if (timestamp - hostLastFrameTime < HOST_FRAME_MS) { animId = requestAnimationFrame(hostLoop); return; }
+    hostLastFrameTime = timestamp;
     if (!active) return;
     const newPixels = [];
     curves.forEach(c => {
