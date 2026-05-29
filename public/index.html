@@ -842,9 +842,10 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       if (!c.invisible && collidesAt(c.x,c.y,c,zoneSize)) killCurve(c);
     });
     drawZone(zoneSize);
-    relay('mp:frame', {
-      curves: curves.map(c=>({pid:c.pid,alive:c.alive,invisible:c.invisible})),
-      pixels: newPixels, zoneSize
+    sock.emit('host:state', {
+      curves: curves.map(c=>({id:c.pid,x:Math.round(c.x),y:Math.round(c.y),angle:c.angle,alive:c.alive,inHole:c.invisible,color:c.color})),
+      pixels: newPixels,
+      zone: zoneSize
     });
     const alive = curves.filter(c=>c.alive);
     if (alive.length<=1 && active) { hostEndMatch(alive[0]?.pid||null); return; }
@@ -951,13 +952,16 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     });
     sock.on('mp:match_start',data=>{
       matchNum=data.matchNum; isTiebreaker=data.isTiebreaker; tiedPids=data.tiedPids||[];
-      lastZoneDraw=-1; clearCanvas(); hideBetween();
+      lastZoneDraw=-1;
+      $id('mp-final').style.display='none';
+      $id('mp-match-result').style.display='none';
+      clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
     });
-    sock.on('mp:frame',({curves:sc,pixels,zoneSize:z})=>{
+    sock.on('state',({curves:sc,pixels,zone:z})=>{
       drawPixels(pixels);
       drawZone(z);
-      renderHUD(sc.filter(c=>c.alive).map(c=>c.pid));
+      renderHUD(sc.filter(c=>c.alive).map(c=>c.id));
     });
     sock.on('mp:between',data=>{ scores=data.scores; showBetween(data); });
     sock.on('mp:final',data=>showFinal(data));

@@ -45,7 +45,7 @@ io.on('connection', socket => {
     if (!name) return;
     let code, tries = 0;
     do { code = genCode(); } while (rooms[code] && ++tries < 100);
-    rooms[code] = { hostId: socket.id, players: [{ id: socket.id, name, colorIdx: 0 }] };
+    rooms[code] = { code, hostId: socket.id, players: [{ id: socket.id, name, colorIdx: 0 }] };
     socket.join(code);
     socket.emit('mp:created', { code, playerId: socket.id, players: playerList(rooms[code]) });
   });
@@ -79,7 +79,14 @@ io.on('connection', socket => {
     io.to(room.hostId).emit('mp:input', { fromId: socket.id, left: !!left, right: !!right });
   });
 
-  // Host → all others: relay game events (state, match lifecycle)
+  // Host → all others: per-frame game state (high-frequency path)
+  socket.on('host:state', (data) => {
+    const entry = Object.entries(rooms).find(([, r]) => r.hostId === socket.id);
+    if (!entry) return;
+    socket.to(entry[0]).emit('state', data);
+  });
+
+  // Host → all others: relay game events (match lifecycle)
   socket.on('mp:relay', ({ event, data } = {}) => {
     const room = Object.values(rooms).find(r => r.hostId === socket.id);
     if (!room) return;
