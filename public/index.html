@@ -966,6 +966,11 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     scores={}; players.forEach(p=>scores[p.id]=0);
 
     let inputEnabled=false;
+    // Local prediction state
+    let localX=0, localY=0, localAngle=0, localColor=null;
+    let prevLocalX=0, prevLocalY=0;
+    let predAnimId=null;
+
     const nhKeys={};
     const send=()=>{
       if(!inputEnabled) return;
@@ -977,31 +982,65 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     });
     document.addEventListener('keyup',e=>{ nhKeys[e.code]=false; send(); });
 
+    function predLoop() {
+      if(!inputEnabled){predAnimId=null;return;}
+      if(nhKeys['ArrowLeft'])  localAngle-=0.040;
+      if(nhKeys['ArrowRight']) localAngle+=0.040;
+      prevLocalX=localX; prevLocalY=localY;
+      localX+=Math.cos(localAngle)*1.9;
+      localY+=Math.sin(localAngle)*1.9;
+      ctx.strokeStyle=localColor; ctx.lineWidth=LINE_W; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(prevLocalX,prevLocalY); ctx.lineTo(localX,localY); ctx.stroke();
+      predAnimId=requestAnimationFrame(predLoop);
+    }
+
+    function stopPred(){
+      if(predAnimId){cancelAnimationFrame(predAnimId);predAnimId=null;}
+    }
+
     sock.on('mp:countdown',({count})=>{
       const cd=$id('cd-msg');
       if(count>0){cd.style.opacity='1';cd.textContent=count;}
-      else {cd.style.opacity='0'; inputEnabled=true;}
+      else {cd.style.opacity='0'; inputEnabled=true; predAnimId=requestAnimationFrame(predLoop);}
     });
     sock.on('mp:match_start',data=>{
       matchNum=data.matchNum; isTiebreaker=data.isTiebreaker; tiedPids=data.tiedPids||[];
       lastZoneDraw=-1; inputEnabled=false;
+      stopPred();
       $id('mp-final').style.display='none';
       $id('mp-match-result').style.display='none';
       clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
+      // Seed local prediction from spawn position
+      const me=data.players.find(p=>p.pid===myId);
+      if(me){
+        localX=me.x; localY=me.y; localAngle=me.angle;
+        prevLocalX=me.x; prevLocalY=me.y;
+        localColor=me.color;
+      }
     });
     sock.on('state',({curves:sc,pixels,zone:z})=>{
       if(!inputEnabled) return;
       ctx.lineWidth=LINE_W; ctx.lineCap='round';
+      // Draw all players except local — local is drawn by predLoop
       for(const p of pixels){
+        if(p.color===localColor) continue;
         ctx.strokeStyle=p.color;
         ctx.beginPath(); ctx.moveTo(p.px,p.py); ctx.lineTo(p.x,p.y); ctx.stroke();
+      }
+      // Reconcile: snap to server if prediction has drifted more than 10px
+      const me=sc.find(c=>c.id===myId);
+      if(me){
+        if(!me.alive) stopPred();
+        else if(Math.hypot(me.x-localX, me.y-localY)>=10){
+          localX=me.x; localY=me.y; localAngle=me.angle;
+        }
       }
       drawZone(z);
       renderHUD(sc.filter(c=>c.alive).map(c=>c.id));
     });
-    sock.on('mp:between',data=>{ inputEnabled=false; scores=data.scores; showBetween(data); });
-    sock.on('mp:final',data=>{ inputEnabled=false; showFinal(data); });
+    sock.on('mp:between',data=>{ inputEnabled=false; stopPred(); scores=data.scores; showBetween(data); });
+    sock.on('mp:final',data=>{ inputEnabled=false; stopPred(); showFinal(data); });
   }
 
   // ── Socket relay ──────────────────────────────────────────────────────────
