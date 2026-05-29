@@ -2178,7 +2178,7 @@ BaseRoomConfig.prototype.getMaxScore = function()
  */
 BaseRoomConfig.prototype.getDefaultMaxScore = function()
 {
-    return Math.max(1, (this.room.players.count() - 1) * 10);
+    return 50;
 };
 
 /**
@@ -6872,7 +6872,7 @@ Game.prototype.resolveScores = function()
     }
 
     if (winner) {
-        winner.addScore(Math.max(this.avatars.count() - 1, 1));
+        winner.addScore(5);
         this.roundWinner = winner;
     }
 

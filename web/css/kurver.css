@@ -1,0 +1,154 @@
+/* ── Kurver theme overrides ─────────────────────────────────────────────── */
+
+/* Base */
+html, body {
+  background: #0d0d1a;
+  color: rgba(255,255,255,0.8);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+a, a:visited { color: rgba(255,255,255,0.7); }
+a:hover      { color: #fff; }
+
+::selection { background: #FF4444; color: #fff; }
+
+/* Header */
+header {
+  background-color: #0d0d1a;
+  background-image: none;
+  border-bottom: 3px solid #FF4444;
+  margin-bottom: 30px;
+}
+header .logo,
+header .logo:visited { color: #fff; font-weight: 700; letter-spacing: 4px; }
+header .logo.animated:after { background: #FF4444; }
+
+/* Footer */
+footer {
+  background: #080810;
+  color: rgba(255,255,255,0.25);
+}
+footer a, footer a:visited { color: rgba(255,255,255,0.25); }
+footer a:hover { color: rgba(255,255,255,0.6); }
+footer a.animated:after { background: rgba(255,255,255,0.25); }
+
+/* Buttons */
+.btn-default {
+  color: rgba(255,255,255,0.8);
+  background: transparent;
+  border-color: rgba(255,255,255,0.4);
+}
+.btn-default:hover, .btn-default:focus {
+  color: #fff;
+  border-color: #FF4444;
+  background: rgba(255,68,68,0.1);
+}
+.btn-primary {
+  background-color: #FF4444;
+  border-color: #cc3333;
+}
+.btn-primary:hover, .btn-primary:focus {
+  background-color: #cc3333;
+  border-color: #aa2222;
+}
+
+/* Forms / Inputs */
+input[type=text],
+input[type=password],
+textarea,
+.form-control {
+  background: transparent;
+  color: rgba(255,255,255,0.8);
+  border-color: rgba(255,255,255,0.3);
+}
+input[type=text]:focus,
+input[type=password]:focus,
+.form-control:focus {
+  border-color: #FF4444;
+  box-shadow: none;
+  outline: none;
+}
+input[type=text]::placeholder,
+input[type=password]::placeholder { color: rgba(255,255,255,0.3); }
+
+/* Tables */
+.table { color: rgba(255,255,255,0.8); }
+.table tbody tr td { border-color: rgba(255,255,255,0.08); }
+.rooms tbody > tr:hover td,
+.room  tbody > tr:hover td {
+  background: rgba(255,68,68,0.12);
+  cursor: pointer;
+}
+
+/* Room list header / h2 */
+h1, h2, h3, h4, h5, h6, .h1, .h2, .h3, .h4, .h5, .h6 {
+  color: rgba(255,255,255,0.9);
+}
+.header { color: rgba(255,255,255,0.8); border-bottom-color: rgba(255,255,255,0.1); }
+
+/* Create room form */
+#submit {
+  background: #FF4444;
+  color: #fff;
+  border: none;
+}
+#submit:hover { background: #cc3333; }
+
+/* Panels */
+.panel, #profile {
+  background: #11111f;
+  border-color: rgba(255,255,255,0.1);
+}
+
+/* Alerts */
+.alert { color: rgba(255,255,255,0.8); }
+
+/* Tuto section */
+#intro { color: rgba(255,255,255,0.8); }
+#intro .quote { border-left-color: #FF4444; color: rgba(255,255,255,0.5); }
+
+/* Room item colours */
+.rooms tbody > tr.in-game td,
+.room  tbody > tr.in-game td { color: rgba(255,255,255,0.35); }
+.rooms tbody > tr > td a:hover,
+.room  tbody > tr > td a:hover { color: #FF4444; }
+
+/* Connecting / error pages */
+#connecting h3, #error h3 { color: rgba(255,255,255,0.8); }
+#error p { color: rgba(255,255,255,0.5); }
+
+/* Game canvas area */
+body.game-mode { background: #0d0d1a; }
+
+/* Solo challenge button */
+.solo-btn {
+  display: inline-block;
+  padding: 12px 32px;
+  background: #FF4444;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-decoration: none;
+  border-radius: 4px;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 32px;
+  transition: background .15s;
+}
+.solo-btn:hover, .solo-btn:visited { color: #fff; background: #cc3333; text-decoration: none; }
+
+.solo-section {
+  text-align: center;
+  padding: 24px 0 0;
+}
+.solo-section p {
+  color: rgba(255,255,255,0.4);
+  font-size: 13px;
+  margin-top: 8px;
+  letter-spacing: 0.5px;
+}
+
+/* Misc dark theme */
+blockquote { border-left-color: rgba(255,255,255,0.2); }
+hr { border-color: rgba(255,255,255,0.1); }

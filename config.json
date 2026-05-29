@@ -1,1 +1,7 @@
-{"port":3000,"googleAnalyticsId":null,"inspector":{"enabled":false}}
+{
+    "port": 2000,
+    "googleAnalyticsId": null,
+    "inspector": {
+        "enabled": false
+    }
+}
