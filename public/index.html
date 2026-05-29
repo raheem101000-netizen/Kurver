@@ -781,6 +781,7 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
   let curves=[], active=false, animId=null;
   let zoneSize=0, zoneTick=0, zoneIv=null;
   let inputs={};
+  let _dbgLastFrame=0, _dbgFrameCount=0;
 
   function spawnCurves(players) {
     const margin = W*0.25, result = [];
@@ -847,6 +848,14 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       pixels: newPixels,
       zone: zoneSize
     });
+    _dbgFrameCount++;
+    const _now = Date.now();
+    if (_dbgLastFrame) {
+      if (_dbgFrameCount % 60 === 0) {
+        console.log('[dbg] pixels/tick:', newPixels.length, '| frame delta ms:', _now - _dbgLastFrame, '| transport:', sock.io.engine.transport.name);
+      }
+    }
+    _dbgLastFrame = _now;
     const alive = curves.filter(c=>c.alive);
     if (alive.length<=1 && active) { hostEndMatch(alive[0]?.pid||null); return; }
     animId = requestAnimationFrame(hostLoop);
@@ -938,6 +947,9 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
   function nonHostInit(players) {
     sessionPlayers=players; isTiebreaker=false; tiedPids=[];
     scores={}; players.forEach(p=>scores[p.id]=0);
+
+    let localCurve=null, localAnimId=null;
+
     const nhKeys={};
     const send=()=>sock.emit('mp:input',{left:!!nhKeys['ArrowLeft'],right:!!nhKeys['ArrowRight']});
     document.addEventListener('keydown',e=>{
@@ -945,6 +957,18 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       if(!nhKeys[e.code]){nhKeys[e.code]=true;send();}
     });
     document.addEventListener('keyup',e=>{ nhKeys[e.code]=false; send(); });
+
+    function localLoop() {
+      if (!localCurve||!localCurve.alive) return;
+      if (nhKeys['ArrowLeft'])  localCurve.angle -= TURN;
+      if (nhKeys['ArrowRight']) localCurve.angle += TURN;
+      const px=localCurve.x, py=localCurve.y;
+      localCurve.x += STEP*Math.cos(localCurve.angle);
+      localCurve.y += STEP*Math.sin(localCurve.angle);
+      ctx.strokeStyle=localCurve.color; ctx.lineWidth=LINE_W; ctx.lineCap='round';
+      ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(localCurve.x,localCurve.y); ctx.stroke();
+      localAnimId=requestAnimationFrame(localLoop);
+    }
 
     sock.on('mp:countdown',({count})=>{
       const cd=$id('cd-msg');
@@ -957,9 +981,18 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
       $id('mp-match-result').style.display='none';
       clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
+      if (localAnimId){cancelAnimationFrame(localAnimId);localAnimId=null;}
+      const me=data.players.find(p=>p.pid===myId);
+      if (me){
+        localCurve={x:me.x,y:me.y,angle:me.angle,color:me.color,alive:true};
+        localAnimId=requestAnimationFrame(localLoop);
+      }
     });
     sock.on('state',({curves:sc,pixels,zone:z})=>{
-      drawPixels(pixels);
+      const myColor=localCurve&&localCurve.color;
+      drawPixels(myColor ? pixels.filter(p=>p.color!==myColor) : pixels);
+      const me=sc.find(c=>c.id===myId);
+      if (me&&!me.alive&&localCurve) localCurve.alive=false;
       drawZone(z);
       renderHUD(sc.filter(c=>c.alive).map(c=>c.id));
     });
