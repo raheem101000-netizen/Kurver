@@ -914,13 +914,20 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
     const initData = { matchNum, isTiebreaker, tiedPids,
       players: curves.map(c=>({pid:c.pid,color:c.color,x:c.x,y:c.y,angle:c.angle})) };
     relay('mp:match_start', initData);
+    active=false;
     let count=3; const cd=$id('cd-msg');
     cd.style.opacity='1'; cd.textContent=count;
     const t=setInterval(()=>{
       count--;
       relay('mp:countdown',{count});
-      if (count>0) cd.textContent=count;
-      else { clearInterval(t); cd.style.opacity='0'; active=true; hostStartZone(); animId=requestAnimationFrame(hostLoop); }
+      if (count>0) { cd.textContent=count; }
+      else {
+        clearInterval(t);
+        cd.style.opacity='0';
+        active=true;
+        hostStartZone();
+        animId=requestAnimationFrame(hostLoop);
+      }
     },1000);
   }
 
@@ -962,18 +969,19 @@ canvas { display: block; width: 680px; height: 420px; border-radius: 0 0 6px 6px
 
     sock.on('mp:countdown',({count})=>{
       const cd=$id('cd-msg');
-      if(count>0){cd.style.opacity='1';cd.textContent=count;}else cd.style.opacity='0';
+      if(count>0){cd.style.opacity='1';cd.textContent=count;}
+      else {cd.style.opacity='0'; inputEnabled=true;}
     });
     sock.on('mp:match_start',data=>{
       matchNum=data.matchNum; isTiebreaker=data.isTiebreaker; tiedPids=data.tiedPids||[];
-      lastZoneDraw=-1;
+      lastZoneDraw=-1; inputEnabled=false;
       $id('mp-final').style.display='none';
       $id('mp-match-result').style.display='none';
       clearCanvas(); hideBetween();
       renderHUD(data.players.map(p=>p.pid));
-      inputEnabled=true;
     });
     sock.on('state',({curves:sc,pixels,zone:z})=>{
+      if(!inputEnabled) return;
       ctx.lineWidth=LINE_W; ctx.lineCap='round';
       for(const p of pixels){
         ctx.strokeStyle=p.color;
