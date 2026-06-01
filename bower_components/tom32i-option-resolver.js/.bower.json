@@ -1,0 +1,36 @@
+{
+  "name": "option-resolver.js",
+  "version": "0.0.2",
+  "description": "Simple Javascript Option Resolver",
+  "keywords": [
+    "option",
+    "option",
+    "resolver",
+    "config",
+    "configuration"
+  ],
+  "homepage": "https://github.com/Tom32i/option-resolver.js",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Thomas JARRAND",
+      "email": "thomas.jarrand@gmail.com",
+      "homepage": "http://thomas-jarrand.com"
+    }
+  ],
+  "main": "dist/option-resolver.min.js",
+  "dependencies": {},
+  "ignore": [
+    "**/.*",
+    "node_modules"
+  ],
+  "_release": "0.0.2",
+  "_resolution": {
+    "type": "version",
+    "tag": "v0.0.2",
+    "commit": "8e119a502a072d318de67c2c7d68606200b6d853"
+  },
+  "_source": "https://github.com/Tom32i/option-resolver.js.git",
+  "_target": "~0.0.*",
+  "_originalSource": "tom32i-option-resolver.js"
+}

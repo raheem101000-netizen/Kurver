@@ -1,0 +1,19 @@
+{
+  "name": "asset-loader.js",
+  "version": "0.0.2",
+  "description": "Image, sprite, sound loader for HTML5 games",
+  "keywords": ["html5", "loader", "preload", "image", "sound", "audio"],
+  "homepage": "https://github.com/Tom32i/asset-loader.js",
+  "license": "MIT",
+  "authors": [{
+    "name": "Thomas JARRAND",
+    "email": "thomas.jarrand@gmail.com",
+    "homepage": "http://thomas-jarrand.com"
+  }],
+  "main": "dist/asset-loader.min.js",
+  "dependencies": {},
+  "ignore": [
+    "**/.*",
+    "node_modules"
+  ]
+}

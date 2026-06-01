@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/eliasshinni/Downloads/**)",
+      "Read(//Users/eliasshinni/**)",
+      "Bash(node /Users/eliasshinni/curvytron-src/curvytron-master/src/server/launcher.js)",
+      "Bash(curl -s http://localhost:8080/)",
+      "Bash(kill %1)",
+      "Bash(node bin/curvytron.js)",
+      "Bash(wait)",
+      "Bash(pkill -f \"node.*curvytron\\\\|node.*server\")",
+      "Bash(./node_modules/.bin/gulp --version)",
+      "Bash(grep -E \"^\\\\d+:.*#[0-9a-fA-F]{3,6}|body|header|footer|\\\\.container|html \")",
+      "Bash(grep -n \"html,\\\\s*body\\\\|^html\\\\s*{\\\\|^body\\\\s*{\\\\|header\\\\s*{\\\\|footer\\\\s*{\\\\|\\\\.brand\\\\|a:hover\\\\|a\\\\s*{\" /Users/eliasshinni/curvytron-src/curvytron-master/web/css/style.css)",
+      "Bash(cp -r /Users/eliasshinni/curvytron-src/curvytron-master/web/. /Users/eliasshinni/kurver/web/)",
+      "Bash(cp \"/Users/eliasshinni/Downloads/kurve_br \\(2\\).html\" /Users/eliasshinni/kurver/web/solo.html)",
+      "Bash(cp /Users/eliasshinni/curvytron-src/curvytron-master/bin/curvytron.js /Users/eliasshinni/kurver/bin/curvytron.js)",
+      "Bash(curl -s http://localhost:2000/)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:2000/js/curvytron.js)",
+      "Read(//private/tmp/curvytron77/**)",
+      "Bash(git -C /tmp/curvytron77 remote -v)",
+      "Bash(mkdir -p /tmp/curvytron77/public)",
+      "Read(//tmp/curvytron77/**)",
+      "Bash(npm install *)",
+      "Bash(timeout 5 node server.js)",
+      "Bash(node -e ' *)",
+      "Bash(node --check server.js)",
+      "Bash(node --check public/game.js)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(git commit *)",
+      "Read(//private/tmp/**)",
+      "Bash(node server.js)",
+      "Bash(git remote *)"
+    ]
+  }
+}

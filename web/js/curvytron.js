@@ -4167,14 +4167,20 @@ RoomsController.prototype.createRoom = function(e)
  *
  * @param {Object} result
  */
-RoomsController.prototype.onCreateRoom = function(result)
-{
+RoomsController.prototype.onCreateRoom = function(result) {
     if (result.success) {
-        this.$scope.name = null;
-        this.joinRoom(this.repository.createRoom(result.room));
+        this.$scope.showModal = false;
+        var roomOpen = this.$scope.roomOpen;
+        this.$scope.roomName = '';
+        this.$scope.roomOpen = null;
+        var room = this.repository.createRoom(result.room);
+        this.joinRoom(room);
+        if (roomOpen === false) {
+            this.client.addEvent('room:config:open', {open: false}, function(){});
+        }
         this.applyScope();
     } else {
-        console.error('Could not create room %s', this.$scope.name);
+        console.error('Could not create room');
     }
 };
 
